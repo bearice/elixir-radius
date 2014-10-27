@@ -1,7 +1,6 @@
 defmodule RadiusDict do
   require GenServer
   require Logger
-  require Record
 
   def init(file) do
     init_ets()
@@ -134,7 +133,6 @@ defmodule RadiusDict do
     def by_value(vendor \\ nil, attr, name) do
       lookup! value: {vendor,attr,name}
     end
-
   end #module Value
   
   defp init_ets() do
