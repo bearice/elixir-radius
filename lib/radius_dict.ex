@@ -3,181 +3,254 @@ defmodule RadiusDict do
   require Logger
   require Record
 
-  Record.defrecord :attribute, [name: nil, id: nil, type: nil, opts: nil]
-  Record.defrecord :vendor,    [name: nil, id: nil, format: nil]
-  Record.defrecord :value,     [name: nil, id: nil]
-
-  def init(_) do
-    {:ok,{}}
+  def init(file) do
+    init_ets()
+    load(file)
+    {:ok,%{file: file}}
   end
 
-  def handle_call({:lookup,query},_from,state) do
-    {:reply, :ok, state}
+  def handle_call(:reload,_from,state) do
+    ctx = load(state.file)
+    {:reply, {:ok,ctx}, state}
   end #handle_call/3
 
-  def init_ets() do
-    :ets.new :radius_attribute_name, [:set, :protected, :named_table, {:keypos,2}]
-    :ets.new :radius_attribute_id,   [:set, :protected, :named_table, {:keypos,3}]
-    :ets.new :radius_vendor_name,    [:set, :protected, :named_table, {:keypos,2}]
-    :ets.new :radius_vendor_id,      [:set, :protected, :named_table, {:keypos,3}]
-    :ets.new :radius_value_name,     [:set, :protected, :named_table, {:keypos,2}]
-    :ets.new :radius_value_id,       [:set, :protected, :named_table, {:keypos,3}]
+  #exports
+  def start_link(file) do
+    GenServer.start_link(__MODULE__,file)
+  end #start_link/1
+
+  def reload()  do
+    GenServer.call(__MODULE__,:reload)
+  end #reload
+
+  defmodule EntryNotFoundError do
+    defexception [:type,:key]
+    def message(e) do
+      "Enrty #{e.type} not found for key: #{inspect e.key}"
+    end
+  end
+
+  defmodule DictEntry do
+    defmacro __using__(_) do
+      quote do
+        def init! do
+          DictEntry.__init__(__MODULE__)
+        end
+        def insert(val) do
+          DictEntry.__insert__(__MODULE__,val)
+        end
+        def lookup(key) do
+          try do
+            lookup!(key)
+          rescue
+            e in EntryNotFoundError -> []
+          end
+        end
+        def lookup!(key) do
+          DictEntry.__lookup__(__MODULE__,key)
+        end
+        def on_insert(val) do
+          val
+        end
+        def on_load(val) do
+          val
+        end
+        defoverridable [ on_insert: 1, on_load: 1 ]
+      end
+    end
+    def __init__(mod) do
+      :ets.new mod, [:set, :protected, :named_table]
+    end
+    def __insert__(mod,val) do
+      val = mod.on_insert val
+      keys = val|> mod.index_for
+      objs = Enum.map keys,&{&1,val} 
+      :ets.insert mod, objs 
+    end
+    def __lookup__(mod,[key]) do
+      __lookup__ mod,key
+    end
+    def __lookup__(mod,key) do
+      try do
+        :ets.lookup_element mod, key, 2
+      rescue
+        e in ArgumentError -> 
+          raise EntryNotFoundError, type: mod, key: key
+      end
+    end
+  end #module DictEntry
+
+  defmodule Vendor do
+    use DictEntry
+    defstruct id: nil, name: nil, format: {1,1}
+    def index_for(val) do
+      [ id:   val.id, 
+        name: val.name]
+    end
+    def by_name(nil) do
+      %Vendor{}
+    end
+    def by_name(name) do
+      lookup! name: name
+    end
+    def by_id(id) do
+      lookup! id: id
+    end
+  end #module Vendor
+
+  defmodule Attribute do
+    use DictEntry
+    defstruct id: nil, name: nil, type: nil, opts: [], vendor: nil
+    def on_insert(val) do
+      v = Vendor.by_name val.vendor
+      %{val|vendor: v}
+    end
+    def index_for(val) do
+      [ id:  {val.vendor.id, val.id},
+        name: val.name]
+    end
+    def by_name(vendor \\ nil, name) do
+      lookup! name: {vendor,name}
+    end
+    def by_id(vendor \\ nil, id) do
+      lookup! id: {vendor,id}
+    end
+  end #module Attribute
+
+  defmodule Value do
+    use DictEntry
+    defstruct name: nil, attr: nil, value: nil
+    def on_insert(val) do
+      a = Attribute.lookup! name: val.attr
+      %{val|attr: a}
+    end
+    def index_for(val) do
+      [value: {val.attr.vendor.id,   val.attr.id,   val.value}, 
+        name: {val.attr.vendor.name, val.attr.name, val.name}]
+    end
+    def by_name(vendor \\ nil, attr, name) do
+      lookup! name: {vendor,attr,name}
+    end
+    def by_value(vendor \\ nil, attr, name) do
+      lookup! value: {vendor,attr,name}
+    end
+
+  end #module Value
+  
+  defp init_ets() do
+    Vendor.init!
+    Attribute.init!
+    Value.init!
     :ok
   end
 
-  def add_vendor(v) when Record.is_record(v,:vendor) do
-    :ets.insert_new :radius_vendor_name, v
-    :ets.insert_new :radius_vendor_id,   v 
+  defmodule ParserError do
+    defexception [ file: "<unknown>", line: -1, msg: nil ]
+    def exception({:error,{line,_,msg}}) do
+      %ParserError{line: line, msg: msg}
+    end
+    def exception({:error,{line,_,msg},_}) do
+      %ParserError{line: line, msg: msg}
+    end
+    def message(e) do
+      "ParserError: at file: #{e.file}:#{e.line} #{e.msg}"
+    end
   end
 
-  def add_attribute(v) when Record.is_record(v,:attribute) do
-    :ets.insert_new :radius_attribute_name, v
-    :ets.insert_new :radius_attribute_id,   v 
+  defp load(path) when is_binary(path) do
+    ctx = %{path: [path], vendor: nil, vendors: [], attrs: [], values: []}
+    ctx = load ctx
+    Enum.each ctx.vendors, &Vendor.insert/1
+    Enum.each ctx.attrs, &Attribute.insert/1
+    Enum.each ctx.values, &Value.insert/1
+    ctx
   end
 
-  def add_value(v) when Record.is_record(v,:value) do
-    :ets.insert_new :radius_value_name, v
-    :ets.insert_new :radius_value_id,   v 
-  end
-
-  def find_vendor(val) when is_binary(val) do
-    :ets.lookup :radius_vendor_name, val
-  end
-  def find_vendor(val) when is_integer(val) do
-    :ets.lookup :radius_vendor_id, val
-  end
-
-  def find_attribute(val) when is_binary(val) do
-    :ets.lookup :radius_attribute_name, val
-  end
-  def find_attribute(val) when is_integer(val) do
-    :ets.lookup :radius_attribute_id, val
-  end
-
-  def reload_dict() do
-  end #reload_dict
-
-  def load(path) when is_binary(path) do
-    ctx = %{path: path, vendor: %{name: nil, id: 0}}
-    load ctx
-  end
-
-  def load(ctx) when is_map(ctx) do
-    path = ctx.path
+  defp load(ctx) when is_map(ctx) do
+    path = hd ctx.path
     Logger.info "Loading dict: #{path}"
     try do
-      spec = File.read!(path) |> String.to_char_list |> _tokenlize! |> _parse!
+      spec = File.read!(path) |> String.to_char_list |> tokenlize! |> parse!
       process_dict(ctx,spec)
     rescue
-      e -> 
-        Logger.error inspect e
-        e
+      e in ParserError -> reraise %{e|file: path}, System.stacktrace
+      e -> reraise e,System.stacktrace
     after
       Logger.flush
     end
   end
 
-  def _tokenlize!(string) do
+  defp tokenlize!(string) do
     case :radius_dict_lex.string string do
       {:ok,tokens, _} -> tokens 
-      {:error,{line,_,msg}} = e ->
-        Logger.error "Error at line #{line}: #{inspect msg}"
-        raise e
-      e ->
-        Logger.error "Error: #{inspect e}"
-        raise e
+      e -> raise ParserError, e
     end
   end
-  def _parse!(tokens) do
+  defp parse!(tokens) do
     case :radius_dict_parser.parse(tokens) do
       {:ok,spec} -> spec
-      {:error,{line,_,msg}} = e ->
-        Logger.debug inspect _token_near(tokens,line,2)
-        Logger.error "Error at line #{line}: #{inspect msg}"
+      e ->
+        e = ParserError.exception e
+        Logger.debug inspect _token_near(tokens,[],e.line-2,e.line+2)
         raise e
     end
   end
 
-  def _token_near(l,pos,range) do
-    _token_near [],l,pos+range,pos-range
-  end
-  def _token_near(acc,[],_,_) do
+  defp _token_near(acc,[],_,_) do
     :lists.reverse acc
   end
-  def _token_near(acc,[h|t],max,min) do
-    line = case h do
-      {_,line} -> line
-      {_,line,_} -> line
-    end
-    acc1 = cond do
-      line <= max and line >= min -> [h|acc]
-      true -> acc
-    end
-    _token_near acc1,t,max,min
+  defp _token_near(acc,[h|t],min,max) when :erlang.element(2,h) in min..max do
+    _token_near [h|acc],t,max,min
+  end
+  defp _token_near(acc,[_|t],min,max) do
+    _token_near acc,t,max,min
   end
 
-  def process_dict(_,[]) do
-    :ok
+  defp process_dict(ctx,[]) do
+    ctx
   end
-  def process_dict(ctx,[{:include,name}|tail]) do
-    base = Path.dirname ctx.path
-    name = Path.join base,name
-    case load name do
-      :ok -> process_dict ctx,tail
-      e -> e
-    end
-  end
-  def process_dict(ctx,[{:vendor,name,id,format}|tail]) do
-    add_vendor vendor(name: to_string(name), id: id, format: format)
+  defp process_dict(ctx,[{:include,name}|tail]) do
+    target = ctx.path |> Path.dirname |> Path.join name 
+    ctx = %{ctx| path: [target|ctx.path]}
+    ctx = load ctx
+    ctx = %{ctx| path: Enum.drop(ctx.path,1)}
     process_dict ctx,tail
   end
-  def process_dict(ctx,[{:vendor_begin,name}|tail]) do
+  defp process_dict(ctx,[{:vendor_begin,name}|tail]) do
     name = to_string name
-    case find_vendor name do
-      [{:vendor,vname,vid,_}] ->
-        ctx = %{ctx| vendor: %{name: vname, id: vid} }
-        process_dict ctx,tail
-      _ ->
-        raise {:error,:begin_vendor_not_exist, name}
-    end
+    ctx = %{ctx| vendor: name}
+    process_dict ctx,tail
   end
-  def process_dict(ctx,[{:vendor_end,name}|tail]) do
+  defp process_dict(ctx,[{:vendor_end,name}|tail]) do
     name = to_string(name)
-    v = ctx.vendor
-    if v.name == nil, do: raise {:error,:unexpected_end_vendor}
-    if v.name == name do
-      ctx = %{ctx| vendor: %{name: nil, id: 0} }
+    if ctx.vendor == name do
+      ctx = %{ctx| vendor: nil }
       process_dict ctx,tail
     else
       raise {:error,:end_vendor_not_match, name}
     end
   end
-  def process_dict(ctx,[{:attribute,name,id,type,opts}|tail]) do
-    add_attribute attribute(name: to_string(name), id: {ctx.vendor.id,id}, type: type, opts: opts)
+  defp process_dict(ctx,[{:vendor,name,id,format}|tail]) do
+    name = to_string name
+    v = %Vendor{name: name, id: id, format: format}
+    ctx = %{ctx| vendors: [v|ctx.vendors]}
     process_dict ctx,tail
   end
-  def process_dict(ctx,[{:value,attr,desc,id}|tail]) do
-    attr = to_string(attr)
-    case find_attribute(attr) do
-      [{:attribute,_,aid,_,_}] ->
-        add_attribute attribute(name: to_string(desc), id: {aid,id})
-        process_dict ctx,tail
-      [] ->
-        raise {:error,:attribute_not_defined, attr}
-    end
+  defp process_dict(ctx,[{:attribute,name,id,type,opts}|tail]) do
+    name = to_string(name)
+    a = %Attribute{name: name, id: id, type: type, opts: opts, vendor: ctx.vendor}
+    ctx = %{ctx| attrs: [a|ctx.attrs]}
+    process_dict ctx,tail
   end
-  def process_dict(ctx,[head|tail]) do
+  defp process_dict(ctx,[{:value,attr,desc,id}|tail]) do
+    attr = to_string(attr)
+    desc = to_string(desc)
+    v = %Value{name: desc, attr: attr, value: id}
+    ctx = %{ctx| values: [v|ctx.values]}
+    process_dict ctx,tail
+  end
+  defp process_dict(ctx,[head|tail]) do
     Logger.warn "Unknown command: #{inspect head}"
     process_dict ctx,tail
   end
-
-  #exports
-  def start_link(default) do
-    GenServer.start_link(__MODULE__,default)
-  end #start_link/1
-
-  def lookup(type,val)  do
-    GenServer.call(__MODULE__,:lookup,{type,val})
-  end #lookup
-
 end

@@ -1,2 +1,6 @@
-#IO.puts inspect :radius_dict_lex.string to_char_list "has_tag,encrypt=3"
-RadiusProxy.main []
+RadiusDict.start_link("dict/dictionary")
+IO.puts inspect RadiusDict.Value.by_name("Service-Type","Login-User")
+IO.puts inspect RadiusDict.Value.by_value(6,11)
+IO.puts inspect RadiusDict.Value.by_name("Cisco","Cisco-Disconnect-Cause","Unknown")
+IO.puts inspect RadiusDict.Value.by_value(9,195,11)
+IO.puts inspect RadiusDict.Value.by_value(9,1950,11)
