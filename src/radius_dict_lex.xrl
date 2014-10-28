@@ -28,7 +28,7 @@ Rules.
 {E_VENDOR}     : {token,{vendor_end,TokenLine}}.
 {ATYPE}        : {token,{atype,TokenLine,list_to_atom(TokenChars)}}.
 {COMMA}        : {token,{comma,TokenLine}}.
-{HAS_TAG}      : {token,{aopt,TokenLine,has_tag}}.
+{HAS_TAG}      : {token,{aopt,TokenLine,{has_tag,true}}}.
 {ENCRYPT}      : {token,{aopt,TokenLine,parse_encrypt(TokenChars)}}.
 {FORMAT}       : {token,{format,TokenLine,parse_format(TokenChars)}}.
 %{DIGITS}       : {token,{digits,TokenLine,to_integer(TokenChars)}}.
@@ -50,7 +50,7 @@ parse_include("$INCLUDE"++Name) ->
     {include,trim_ws(Name)}.
 
 parse_encrypt("encrypt="++[X])->
-    {encrypt,X-$1}.
+    {encrypt,X-$0}.
 
 parse_format("format="++[X,_,Y])->
-    {X-$1,Y-$1}.
+    {X-$0,Y-$0}.

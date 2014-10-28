@@ -2,11 +2,12 @@ defmodule RadiusDict do
   require GenServer
   require Logger
 
+
   def init(file) do
     init_ets()
     load(file)
     {:ok,%{file: file}}
-  end
+  end #init/1
 
   def handle_call(:reload,_from,state) do
     ctx = load(state.file)
@@ -168,8 +169,11 @@ defmodule RadiusDict do
     path = hd ctx.path
     Logger.info "Loading dict: #{path}"
     try do
-      spec = File.read!(path) |> String.to_char_list |> tokenlize! |> parse!
-      process_dict(ctx,spec)
+      File.read!(path) 
+      |> String.to_char_list 
+      |> tokenlize! 
+      |> parse!
+      |> (&process_dict ctx,&1).()
     rescue
       e in ParserError -> reraise %{e|file: path}, System.stacktrace
       e -> reraise e,System.stacktrace
@@ -208,7 +212,9 @@ defmodule RadiusDict do
     ctx
   end
   defp process_dict(ctx,[{:include,name}|tail]) do
-    target = ctx.path |> Path.dirname |> Path.join name 
+    target = ctx.path 
+              |> Path.dirname 
+              |> Path.join name 
     ctx = %{ctx| path: [target|ctx.path]}
     ctx = load ctx
     ctx = %{ctx| path: Enum.drop(ctx.path,1)}
