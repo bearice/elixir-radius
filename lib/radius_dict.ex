@@ -64,8 +64,12 @@ defmodule RadiusDict do
     def __insert__(mod,val) do
       val = mod.on_insert val
       keys = val|> mod.index_for
-      objs = Enum.map keys,&{&1,val} 
-      :ets.insert mod, objs 
+      objs = Enum.map keys, fn(x) ->
+        if not :ets.insert_new mod,{x,val} do
+          #Logger.warn "ignored duplicat #{mod}: #{inspect x} at #{val.file}:#{val.line} \nObject: #{inspect val, pretty: true}"
+          :ok
+        end
+      end
     end
     def __lookup__(mod,[key]) do
       __lookup__ mod,key
@@ -82,7 +86,7 @@ defmodule RadiusDict do
 
   defmodule Vendor do
     use DictEntry
-    defstruct id: nil, name: nil, format: {1,1}
+    defstruct id: nil, name: nil, format: {1,1}, file: "(unknown)", line: 0
     def index_for(val) do
       [ id:   val.id, 
         name: val.name]
@@ -100,7 +104,7 @@ defmodule RadiusDict do
 
   defmodule Attribute do
     use DictEntry
-    defstruct id: nil, name: nil, type: nil, opts: [], vendor: nil
+    defstruct id: nil, name: nil, type: nil, opts: [], vendor: nil, file: "(unknown)", line: 0
     def on_insert(val) do
       v = Vendor.by_name val.vendor
       %{val|vendor: v}
@@ -109,8 +113,8 @@ defmodule RadiusDict do
       [ id:  {val.vendor.id, val.id},
         name: val.name]
     end
-    def by_name(vendor \\ nil, name) do
-      lookup! name: {vendor,name}
+    def by_name(name) do
+      lookup! name: name
     end
     def by_id(vendor \\ nil, id) do
       lookup! id: {vendor,id}
@@ -119,7 +123,7 @@ defmodule RadiusDict do
 
   defmodule Value do
     use DictEntry
-    defstruct name: nil, attr: nil, value: nil
+    defstruct name: nil, attr: nil, value: nil, file: "(unknown)", line: 0
     def on_insert(val) do
       a = Attribute.lookup! name: val.attr
       %{val|attr: a}
@@ -167,7 +171,7 @@ defmodule RadiusDict do
 
   defp load(ctx) when is_map(ctx) do
     path = hd ctx.path
-    Logger.info "Loading dict: #{path}"
+    Logger.debug "Loading dict: #{path}" 
     try do
       File.read!(path) 
       |> String.to_char_list 
@@ -220,12 +224,12 @@ defmodule RadiusDict do
     ctx = %{ctx| path: Enum.drop(ctx.path,1)}
     process_dict ctx,tail
   end
-  defp process_dict(ctx,[{:vendor_begin,name}|tail]) do
+  defp process_dict(ctx,[{:vendor_begin,name,_line}|tail]) do
     name = to_string name
     ctx = %{ctx| vendor: name}
     process_dict ctx,tail
   end
-  defp process_dict(ctx,[{:vendor_end,name}|tail]) do
+  defp process_dict(ctx,[{:vendor_end,name,_line}|tail]) do
     name = to_string(name)
     if ctx.vendor == name do
       ctx = %{ctx| vendor: nil }
@@ -234,22 +238,22 @@ defmodule RadiusDict do
       raise {:error,:end_vendor_not_match, name}
     end
   end
-  defp process_dict(ctx,[{:vendor,name,id,format}|tail]) do
+  defp process_dict(ctx,[{:vendor,name,id,format,line}|tail]) do
     name = to_string name
-    v = %Vendor{name: name, id: id, format: format}
+    v = %Vendor{name: name, id: id, format: format, file: hd(ctx.path), line: line}
     ctx = %{ctx| vendors: [v|ctx.vendors]}
     process_dict ctx,tail
   end
-  defp process_dict(ctx,[{:attribute,name,id,type,opts}|tail]) do
+  defp process_dict(ctx,[{:attribute,name,id,type,opts,line}|tail]) do
     name = to_string(name)
-    a = %Attribute{name: name, id: id, type: type, opts: opts, vendor: ctx.vendor}
+    a = %Attribute{name: name, id: id, type: type, opts: opts, vendor: ctx.vendor, file: hd(ctx.path), line: line}
     ctx = %{ctx| attrs: [a|ctx.attrs]}
     process_dict ctx,tail
   end
-  defp process_dict(ctx,[{:value,attr,desc,id}|tail]) do
+  defp process_dict(ctx,[{:value,attr,desc,id,line}|tail]) do
     attr = to_string(attr)
     desc = to_string(desc)
-    v = %Value{name: desc, attr: attr, value: id}
+    v = %Value{name: desc, attr: attr, value: id, file: hd(ctx.path), line: line}
     ctx = %{ctx| values: [v|ctx.values]}
     process_dict ctx,tail
   end

@@ -8,6 +8,14 @@ defmodule RadiusUtil do
     passwd |> hash_xor(auth,secret,[]) |> String.rstrip 0
   end
 
+  def encrypt_rfc2868(passwd,secret,auth) do
+    salt = :crypto.rand_bytes 2
+    passwd |> String.ljust(16,0) |> hash_xor(auth<>salt,secret,[])
+  end
+  def decrypt_rfc2868(<<salt::binary-size(2),passwd::binary>>,secret,auth) do
+    passwd |> hash_xor(auth<>salt,secret,[]) |> String.rstrip 0
+  end
+
   defp hash_xor(<<>>,_,_,acc) do
     acc |> Enum.reverse |> :erlang.iolist_to_binary
   end

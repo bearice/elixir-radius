@@ -37,22 +37,22 @@ fix_comma({A,B,X},{_,_,Y}) ->
     {A,B,X++[$,|Y]}.
 
 make_adef(Name,Id,Type,Opts) ->
-    {attribute,v(Name),v(Id),v(Type),lists:map(fun v/1,Opts)}.
+    {attribute,v(Name),v(Id),v(Type),lists:map(fun v/1,Opts),line(Name)}.
 
 make_vdef(Attr,Desc,Val) ->
-    {value,v(Attr),v(Desc),v(Val)}.
+    {value,v(Attr),v(Desc),v(Val),line(Attr)}.
 
 make_vendor(Name,Id) ->
-    {vendor,v(Name),v(Id),{1,1}}.
+    {vendor,v(Name),v(Id),{1,1},line(Name)}.
 
 make_vendor(Name,Id,Format) ->
-    {vendor,v(Name),v(Id),v(Format)}.
+    {vendor,v(Name),v(Id),v(Format),line(Name)}.
 
 make_vbegin(Name) ->
-    {vendor_begin,v(Name)}.
+    {vendor_begin,v(Name),line(Name)}.
 
 make_vend(Name) ->
-    {vendor_end,v(Name)}.
+    {vendor_end,v(Name),line(Name)}.
 
 make_digit({A,B,X})->
     {A,B,to_integer(X)}.
@@ -61,3 +61,4 @@ to_integer("0x"++L) -> list_to_integer(L,16);
 to_integer(L) -> list_to_integer(L).
 
 v({_,_,V}) -> V.
+line({_,L,_}) -> L.
