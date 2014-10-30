@@ -80,19 +80,26 @@ defmodule Radius do
       try do
         attr = Attribute.by_id vendor,type
         type = attr.name
-        if Keyword.has_key? attr.opts, :has_tag do
-          <<tag,rest::binary>> = value
-          if tag in 0..0x1f do
+        has_tag = Keyword.has_key? attr.opts, :has_tag
+        tag = case value do
+          <<0,rest::binary>> when has_tag==true -> 
             value = rest
-            type = {type,tag}
-          end
+            nil
+          <<tag,rest::binary>> when tag in 1..0x1f and has_tag==true -> 
+            value = rest
+            tag
+          _ -> nil
         end
         value = value 
                 |> decode_value(attr.type)
                 |> resolve_value(vendor,attr.id)
                 |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
 
-        {type,len,value}
+        if tag do
+          {type,len,{tag,value}}
+        else
+          {type,len,value}
+        end
       rescue e in EntryNotFoundError->
           tlv
       end
@@ -163,13 +170,23 @@ defmodule Radius do
       end
       <<tag,6,value::integer-size(32)>>
     end
-    defp encode_attr({tag,value,attr}) do
+    defp encode_attr({type,value,attr}) do
       {t,l}=attr.vendor.format
-      value = encode_value(value,attr.type)
+      value = if Keyword.has_key? attr.opts, :has_tag do
+        {tag,value} = case value do
+          {tag,value} when tag in 0..0x1f -> {tag,value}
+          {tag,value} -> raise "Tag over-range, should be [0-0x1f], got: #{tag}"
+          value -> {0,value}
+        end
+        value = encode_value(value,attr.type)
+        <<tag,value::binary>>
+      else
+        encode_value(value,attr.type)
+      end
       length = byte_size(value) + t + l
       ll = l*8
       tl = t*8
-      <<tag :: integer-size(tl), length :: integer-size(ll), value :: binary>>
+      <<type :: integer-size(tl), length :: integer-size(ll), value :: binary>>
     end
 
     defp encode_value(val,:byte)    when is_integer(val), do: <<val::size(8)>>
@@ -199,14 +216,7 @@ defmodule Radius do
     defp resolve_attr({type,value},ctx,vendor) do
       case lookup_attr(vendor,type) do
         nil -> {type,value}
-        %{type: :integer}=a when is_binary(value) ->
-          try do
-            v = Value.by_name vendor.name,a.name,value
-            {a.id,v.value,a}
-          rescue e in EntryNotFoundError->
-            raise "Value can not be resolved: #{a.name}: #{value}" 
-          end
-        a -> {a.id,value,a}
+        a   -> {a.id,lookup_value(a,value),a}
       end
     end
 
@@ -217,6 +227,18 @@ defmodule Radius do
         e in EntryNotFoundError -> nil
       end
     end
+    defp lookup_value(attr,{tag,val}) do
+      {tag,lookup_value(attr,val)}
+    end
+    defp lookup_value(%{type: :integer}=attr,val) when is_binary(val) do
+      try do
+        v = Value.by_name attr.vendor.name,attr.name,val
+        v.value
+      rescue e in EntryNotFoundError->
+        raise "Value can not be resolved: #{attr.name}: #{val}" 
+      end
+    end
+    defp lookup_value(_,val), do: val
 
     #Raise an error if attr not defined
     defp lookup_attr(_vendor,type) when is_binary(type) do

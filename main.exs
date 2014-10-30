@@ -9,12 +9,14 @@ IO.puts inspect RadiusDict.Value.by_value(9,195,11)
 #IO.puts inspect RadiusDict.Value.by_value(9,1950,11)
 
 attrs = [
+  {"Tunnel-Type","PPTP"},
+  {"Tunnel-Type",{0,"PPTP"}},
+  {"Tunnel-Type",{10,"PPTP"}},
   #test name resolve
   {"Service-Type","Login-User"},
   #test id resolve
   {6,1},
   #test fot has_tag
-  {"Tunnel-Type","PPTP"},
   {"NAS-IP-Address",{1,2,3,4}},
   {"NAS-IP-Address",0x12345678},
   {"Login-IPv6-Host",{2003,0xefff,0,0,0,0,0,4}},
