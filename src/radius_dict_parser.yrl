@@ -26,7 +26,7 @@ ven_def -> vendor_end name_fix : make_vend('$2').
 
 inc_def -> include : v('$1').
 
-#fix comma in name, because leex is greedy only.
+%fix comma in name, because leex is greedy only.
 name_fix -> name : '$1'.
 name_fix -> name comma name_fix: fix_comma('$1','$3').
 
