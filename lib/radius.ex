@@ -338,17 +338,17 @@ defmodule Radius do
     :gen_udp.open(port,[{:active,:false},{:mode,:binary}])
   end
 
-  def recvfrom(sk,secret) when is_binary(secret) do
-    recvfrom sk,fn(_) -> secret end
+  def recv(sk,secret) when is_binary(secret) do
+    recv sk,fn(_) -> secret end
   end
-  def recvfrom(sk,secret_fn) when is_function(secret_fn) do
+  def recv(sk,secret_fn) when is_function(secret_fn) do
     {:ok,{host,port,data}} = :gen_udp.recv sk,5000
     secret = secret_fn.({host,port})
     packet = Packet.decode data,secret
     {:ok,{host,port},packet}
   end
 
-  def sendto(sk,{host,port},packet) do
+  def send(sk,{host,port},packet) do
     data = Packet.encode packet
     :gen_udp.send sk,host,port,data
   end

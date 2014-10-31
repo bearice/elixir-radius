@@ -59,13 +59,13 @@ Logger.debug inspect p, pretty: true
 
 loop = fn(loop)->
   #secret can be a string or a function returning a string
-  #{:ok,host,p} = Radius.recvfrom sk,"123"
-  {:ok,host,p} = Radius.recvfrom sk,fn(_host) -> secret end
+  #{:ok,host,p} = Radius.recv sk,"123"
+  {:ok,host,p} = Radius.recv sk,fn(_host) -> secret end
 
   IO.puts "From #{inspect host} : \n#{inspect p, pretty: true}"
 
   resp = %Radius.Packet{code: "Access-Reject", id: p.id, auth: p.auth, secret: p.secret}
-  Radius.sendto sk,host,resp
+  Radius.send sk,host,resp
 
   loop.(loop)
 end
