@@ -1,7 +1,7 @@
 elixir-radius
 =============
 
-Radius protocol in elixir
+RADIUS protocol encoding and decoding
 
 example
 -------
