@@ -16,7 +16,7 @@ defmodule RadiusDict do
 
   #exports
   def start_link(file) do
-    GenServer.start_link(__MODULE__,file)
+    GenServer.start_link(__MODULE__,file, name: __MODULE__)
   end #start_link/1
 
   def reload()  do

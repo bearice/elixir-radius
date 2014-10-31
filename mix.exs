@@ -2,10 +2,9 @@ defmodule RadiusProxy.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :radius_proxy,
+    [app: :elixir_radius,
      version: "0.0.1",
      elixir: "~> 1.0",
-     escript: escript,
      deps: deps]
   end
 
@@ -13,7 +12,14 @@ defmodule RadiusProxy.Mixfile do
   #
   # Type `mix help compile.app` for more information
   def application do
-    [applications: [:logger]]
+    [
+      applications: [:logger,:crypto],
+      registered: [RadiusDict],
+      mod: {RadiusApp,[]},
+      env: [
+        dict: "dict/dictionary"
+      ]
+    ]
   end
 
   # Dependencies can be Hex packages:
@@ -29,9 +35,5 @@ defmodule RadiusProxy.Mixfile do
     [
       #  {:socket,"~> 0.2.8"}
     ]
-  end
-
-  def escript do
-    [main_module: RadiusProxy]
   end
 end
