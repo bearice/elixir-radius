@@ -50,7 +50,7 @@ defmodule Radius do
       <<type :: integer-size(tl), length :: integer-size(ll), rest :: binary>> = bin
       length = length - 2
       <<value :: binary-size(length),rest::binary>> = rest
-      decode_tlv(rest,[{type, length, value}|acc], fmt)
+      decode_tlv(rest,[{type, value}|acc], fmt)
     end #def decode_tlv/3
 
     defp resolve_tlv(attrs,ctx) when is_list(attrs) do
@@ -61,7 +61,7 @@ defmodule Radius do
     end
 
     #VSA Entry
-    defp resolve_tlv({26,len,value}, ctx, nil) do
+    defp resolve_tlv({26,value}, ctx, nil) do
       type = "Vendor-Specific"
       <<vid::size(32),rest::binary>>=value
       try do
@@ -73,13 +73,13 @@ defmodule Radius do
               resolve_tlv(x,ctx,v.id)
             end
         end
-        {{type,v.name},len,value}
+        {{type,v.name},value}
       rescue e in EntryNotFoundError ->
-        {type,len,value}
+        {type,value}
       end
     end
 
-    defp resolve_tlv({type,len,value}=tlv, ctx, vendor) do
+    defp resolve_tlv({type,value}=tlv, ctx, vendor) do
       try do
         attr = Attribute.by_id vendor,type
         type = attr.name
@@ -99,9 +99,9 @@ defmodule Radius do
                 |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
 
         if tag do
-          {type,len,{tag,value}}
+          {type,{tag,value}}
         else
-          {type,len,value}
+          {type,value}
         end
       rescue e in EntryNotFoundError->
           tlv
@@ -149,7 +149,7 @@ defmodule Radius do
       for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
 
       packet.attrs :: [attr]
-      attr :: {type,value} | {type,_ignored,value}
+      attr :: {type,value} 
       type :: String.t | integer | {"Vendor-Specific", vendor}
       value :: integer | String.t | ipaddr 
       vendor :: String.t | integer
@@ -173,7 +173,7 @@ defmodule Radius do
 
     defp encode_attrs(%{attrs: a}=ctx) do 
       Enum.map a, fn(x) ->
-        x |> remove_tlv_length() |> resolve_attr(ctx) |> encode_attr
+        x |> resolve_attr(ctx) |> encode_attr
       end
     end
 
@@ -240,9 +240,6 @@ defmodule Radius do
     defp encode_value(bin,_), do: bin
 
 
-    defp remove_tlv_length({t,_l,v}), do: {t,v}
-    defp remove_tlv_length({t,v}), do: {t,v}
-
     defp resolve_attr({{type,vid},value},ctx) when type=="Vendor-Specific" or type == 26 do
       {26,encode_vsa(vid,value,ctx)}
     end
@@ -291,7 +288,7 @@ defmodule Radius do
     defp encode_vsa(vid,vsa,ctx) when is_integer(vid), do: encode_vsa(Vendor.by_id(vid), vsa, ctx)
     defp encode_vsa(vendor, vsa, ctx) do
       val = Enum.map vsa, fn(x) ->
-        x|> remove_tlv_length() |>resolve_attr(ctx,vendor)|> encode_attr
+        x|> resolve_attr(ctx,vendor) |> encode_attr
       end
       [<<vendor.id::size(32)>>|val]
     end
@@ -350,11 +347,11 @@ defmodule Radius do
   end
 
   def recvfrom(sk,secret) when is_binary(secret) do
-    recvfrom sk,fn(_,_) -> secret end
+    recvfrom sk,fn(_) -> secret end
   end
   def recvfrom(sk,secret_fn) when is_function(secret_fn) do
     {:ok,{host,port,data}} = :gen_udp.recv sk,5000
-    secret = secret_fn.(host,port)
+    secret = secret_fn.({host,port})
     packet = Packet.decode data,secret
     {:ok,{host,port},packet}
   end
