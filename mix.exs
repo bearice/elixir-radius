@@ -3,8 +3,10 @@ defmodule RadiusProxy.Mixfile do
 
   def project do
     [app: :elixir_radius,
-     version: "0.0.1",
+     version: "0.1.0",
      elixir: "~> 1.0",
+     description: desc,
+     package: package,
      deps: deps]
   end
 
@@ -34,6 +36,19 @@ defmodule RadiusProxy.Mixfile do
   defp deps do
     [
       #  {:socket,"~> 0.2.8"}
+    ]
+  end
+  defp desc do
+    """
+    Decode & encode RADIUS packets
+    """
+  end
+  defp package do
+    [
+      files: ["lib","src","mix.exs","example.exs","README.md","LICENSE","dict"],
+      contributors: ["Bearice Ren"],
+      licenses: ["MIT License"],
+      links: %{"Github" => "https://github.com/bearice/elixir-radius"}
     ]
   end
 end
