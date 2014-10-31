@@ -12,25 +12,28 @@ require Logger
 secret = "112233"
 
 attrs = [
-  {"Tunnel-Type","PPTP"},
   {"User-Password","1234"},
+  #tagged attribute (rfc2868)
+  {"Tunnel-Type","PPTP"},
+  #equals
   {"Tunnel-Type",{0,"PPTP"}},
   {"Tunnel-Type",{10,"PPTP"}},
-  #test name resolve
   {"Service-Type","Login-User"},
-  #test id resolve
+  #tag & value can be integer
   {6,1},
-  #test fot has_tag
+  #ipaddr
   {"NAS-IP-Address",{1,2,3,4}},
   {"NAS-IP-Address",0x12345678},
+  #ipv6addr
   {"Login-IPv6-Host",{2003,0xefff,0,0,0,0,0,4}},
-  #test VSA
+  #VSA
   {{"Vendor-Specific",9},[
     {"Cisco-Disconnect-Cause",10},
     {195,"Unknown"}
   ]},
   #empty VSA?
   {{"Vendor-Specific",311},[]},
+  #some unknown attribute
   {255,"123456"}
 ]
 
