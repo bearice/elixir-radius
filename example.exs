@@ -32,7 +32,7 @@ attrs = [
     {195,"Unknown"}
   ]},
   #empty VSA?
-  {{"Vendor-Specific",311},[]},
+  {{"Vendor-Specific","Microsoft"},[]},
   #some unknown attribute
   {255,"123456"}
 ]
