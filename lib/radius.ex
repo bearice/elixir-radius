@@ -74,7 +74,7 @@ defmodule Radius do
             end
         end
         {{type,v.name},value}
-      rescue e in EntryNotFoundError ->
+      rescue _e in EntryNotFoundError ->
         {type,value}
       end
     end
@@ -103,7 +103,7 @@ defmodule Radius do
         else
           {type,value}
         end
-      rescue e in EntryNotFoundError->
+      rescue _e in EntryNotFoundError->
           tlv
       end
     end
@@ -126,7 +126,7 @@ defmodule Radius do
       try do
         v = Value.by_value vid,aid,val
         v.name
-      rescue e in EntryNotFoundError ->
+      rescue _e in EntryNotFoundError ->
         val
       end
     end
@@ -197,7 +197,7 @@ defmodule Radius do
       value = if Keyword.has_key? attr.opts, :has_tag do
         {tag,value} = case value do
           {tag,value} when tag in 0..0x1f -> {tag,value}
-          {tag,value} -> raise "Tag over-range, should be [0-0x1f], got: #{tag}"
+          {tag,_value} -> raise "Tag over-range, should be [0-0x1f], got: #{tag}"
           value -> {0,value}
         end
         value = encode_value(value,attr.type)
@@ -259,9 +259,14 @@ defmodule Radius do
       try do
         Attribute.by_id vendor.id,type 
       rescue 
-        e in EntryNotFoundError -> nil
+        _e in EntryNotFoundError -> nil
       end
     end
+    #Raise an error if attr not defined
+    defp lookup_attr(_vendor,type) when is_binary(type) do
+      Attribute.by_name type 
+    end
+
     defp lookup_value(attr,{tag,val}) do
       {tag,lookup_value(attr,val)}
     end
@@ -269,17 +274,12 @@ defmodule Radius do
       try do
         v = Value.by_name attr.vendor.name,attr.name,val
         v.value
-      rescue e in EntryNotFoundError->
+      rescue _e in EntryNotFoundError->
         #raise "Value can not be resolved: #{attr.name}: #{val}" 
         val
       end
     end
     defp lookup_value(_,val), do: val
-
-    #Raise an error if attr not defined
-    defp lookup_attr(_vendor,type) when is_binary(type) do
-      Attribute.by_name type 
-    end
 
     defp encode_vsa(vid,value,ctx) when is_binary(value) and is_binary(vid), do: encode_vsa(Vendor.by_name(vid).id,value,ctx)
     defp encode_vsa(vid,value,_) when is_binary(value) and is_integer(vid), do: <<vid::size(32),value>>
@@ -293,9 +293,7 @@ defmodule Radius do
       [<<vendor.id::size(32)>>|val]
     end
 
-    @doc """
-      encode reply header, calc auth hash using ctx.auth
-    """
+    #encode reply header, calc auth hash using ctx.auth
     defp encode_header(ctx,attrs,nil) do
       code = encode_code(ctx.code)
       length = 20 + :erlang.iolist_size attrs
@@ -313,9 +311,8 @@ defmodule Radius do
 
       [header,hash]
     end
-    @doc """
-      encode request header use given auth bytes
-    """
+    
+    #encode request header use given auth bytes
     defp encode_header(ctx,attrs,auth) do
       code = encode_code(ctx.code)
       length = 20 + :erlang.iolist_size attrs
@@ -325,12 +322,7 @@ defmodule Radius do
             length :: integer-size(16) >>
       [header,auth]
     end
-    #defp encode_code(x) when is_binary(x) do 
-    #  x |> String.replace("-","_")
-    #    |> String.downcase() 
-    #    |> String.to_existing_atom()
-    #    |> encode_code()
-    #end
+
     defp encode_code(x) when is_integer(x), do: x
     defp encode_code("Access-Request"), do: 1
     defp encode_code("Access-Accept"), do: 2
