@@ -35,6 +35,8 @@ defmodule RadiusProxy.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps do
     [
+      {:earmark, "~> 0.1", only: :dev},
+      {:ex_doc, "~> 0.6", only: :dev}
       #  {:socket,"~> 0.2.8"}
     ]
   end

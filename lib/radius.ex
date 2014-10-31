@@ -148,12 +148,12 @@ defmodule Radius do
       for request packets, leave packet.auth == nil, then I will generate one from random bytes.
       for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
 
-      packet.attrs :: [attr]
-      attr :: {type,value} 
-      type :: String.t | integer | {"Vendor-Specific", vendor}
-      value :: integer | String.t | ipaddr 
-      vendor :: String.t | integer
-      ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
+          packet.attrs :: [attr]
+          attr :: {type,value} 
+          type :: String.t | integer | {"Vendor-Specific", vendor}
+          value :: integer | String.t | ipaddr 
+          vendor :: String.t | integer
+          ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
 
     """
     def encode(packet) do
@@ -334,10 +334,19 @@ defmodule Radius do
     defp encode_code("Status-Client"), do: 13
   end #defmodule Packet
 
+  @doc """
+    wrapper of gen_udp.open
+  """
   def listen(port) do
     :gen_udp.open(port,[{:active,:false},{:mode,:binary}])
   end
 
+  @doc """
+    recv and decode packet.
+
+        sk :: socket
+        secret :: string | fn({host,port}) -> string
+  """
   def recv(sk,secret) when is_binary(secret) do
     recv sk,fn(_) -> secret end
   end
@@ -348,6 +357,12 @@ defmodule Radius do
     {:ok,{host,port},packet}
   end
 
+  @doc """
+    encode and send packet
+
+        sk :: socket
+        packet:: %Radius.Packet{}
+  """
   def send(sk,{host,port},packet) do
     data = Packet.encode packet
     :gen_udp.send sk,host,port,data

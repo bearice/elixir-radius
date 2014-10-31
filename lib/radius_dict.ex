@@ -9,19 +9,19 @@ defmodule RadiusDict do
     {:ok,%{file: file}}
   end #init/1
 
-  def handle_call(:reload,_from,state) do
-    ctx = load(state.file)
-    {:reply, {:ok,ctx}, state}
-  end #handle_call/3
+  #def handle_call(:reload,_from,state) do
+  #  ctx = load(state.file)
+  #  {:reply, {:ok,ctx}, state}
+  #end #handle_call/3
 
   #exports
   def start_link(file) do
     GenServer.start_link(__MODULE__,file, name: __MODULE__)
   end #start_link/1
 
-  def reload()  do
-    GenServer.call(__MODULE__,:reload)
-  end #reload
+  #def reload()  do
+  #  GenServer.call(__MODULE__,:reload)
+  #end #reload
 
   defmodule EntryNotFoundError do
     defexception [:type,:key]
