@@ -46,7 +46,7 @@ Logger.debug "data=#{inspect data}"
 p = Radius.Packet.decode :erlang.iolist_to_binary(data),secret
 Logger.debug inspect p, pretty: true
 
-#for response packets, set auth=request.auth for password decoding
+#for response packets, set auth=request.auth to generate new HMAC-hash with it.
 p = %Radius.Packet{code: "Access-Accept", id: 12, auth: p.auth, secret: secret, attrs: p.attrs}
 data =  Radius.Packet.encode p
 Logger.debug "data=#{inspect data}"
