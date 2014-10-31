@@ -171,7 +171,7 @@ defmodule RadiusDict do
 
   defp load(ctx) when is_map(ctx) do
     path = hd ctx.path
-    Logger.debug "Loading dict: #{path}" 
+    #Logger.debug "Loading dict: #{path}" 
     try do
       File.read!(path) 
       |> String.to_char_list 

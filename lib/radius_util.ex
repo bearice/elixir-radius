@@ -1,7 +1,8 @@
 defmodule RadiusUtil do
+  require Logger
   use Bitwise
   def encrypt_rfc2865(passwd,secret,auth) do
-    passwd |> String.ljust(16,0) |> hash_xor(auth,secret,[])
+    passwd |> pad_to_16() |> hash_xor(auth,secret,[])
   end
 
   def decrypt_rfc2865(passwd,secret,auth) do
@@ -10,7 +11,7 @@ defmodule RadiusUtil do
 
   def encrypt_rfc2868(passwd,secret,auth) do
     salt = :crypto.rand_bytes 2
-    passwd |> String.ljust(16,0) |> hash_xor(auth<>salt,secret,[])
+    passwd |> pad_to_16() |> hash_xor(auth<>salt,secret,[])
   end
   def decrypt_rfc2868(<<salt::binary-size(2),passwd::binary>>,secret,auth) do
     passwd |> hash_xor(auth<>salt,secret,[]) |> String.rstrip 0
@@ -33,4 +34,17 @@ defmodule RadiusUtil do
     <<z::size(s)>>
   end
 
+  #String.ljust will handle unicode, now bytewise
+  def pad_to_16(bin), do: pad_to_16(bin,[]) |> Enum.reverse |> :erlang.iolist_to_binary
+  def pad_to_16(bin,acc) when byte_size(bin) == 16 do
+    [bin|acc]
+  end
+  def pad_to_16(bin,acc) when byte_size(bin) < 16 do
+    bin = <<bin::binary,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>
+    <<chunk::binary-size(16),_::binary>>=bin
+    [chunk|acc]
+  end
+  def pad_to_16(<<chunk::binary-size(16),rest::binary>>,acc) do
+    pad_to_16(rest,[chunk|acc])
+  end
 end

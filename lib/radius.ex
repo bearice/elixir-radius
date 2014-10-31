@@ -6,6 +6,9 @@ defmodule Radius do
   require Logger
   defmodule Packet do
     defstruct code: nil, id: nil, length: nil, auth: nil, attrs: [], raw: nil, secret: nil
+    @doc """
+      Decode radius packet
+    """
     def decode(data,secret) do
       pkt = %{raw: data, secret: secret, attrs: nil} 
         |> decode_header
@@ -139,19 +142,38 @@ defmodule Radius do
       bin
     end
 
+    @doc """
+      Return an iolist of encoded packet
+
+      for request packets, leave packet.auth == nil, then I will generate one from random bytes.
+      for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
+
+      packet.attrs :: [attr]
+      attr :: {type,value} | {type,_ignored,value}
+      type :: String.t | integer | {"Vendor-Specific", vendor}
+      value :: integer | String.t | ipaddr 
+      vendor :: String.t | integer
+      ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
+
+    """
     def encode(packet) do
       ctx = Map.from_struct(packet)
+      auth = if ctx.auth == nil do
+        auth = :crypto.rand_bytes(16)
+        ctx = Dict.put ctx,:auth, auth
+        auth
+      else
+        nil
+      end
+
       attrs = encode_attrs ctx
-      header = encode_header ctx,attrs
+      header = encode_header ctx,attrs,auth
       [header,attrs] 
     end
 
     defp encode_attrs(%{attrs: a}=ctx) do 
       Enum.map a, fn(x) ->
-        x|> resolve_attr(ctx) |>(fn(x)-> 
-          Logger.debug inspect x
-          x
-        end).()|> encode_attr
+        x |> remove_tlv_length() |> resolve_attr(ctx) |> encode_attr
       end
     end
 
@@ -189,6 +211,21 @@ defmodule Radius do
       <<type :: integer-size(tl), length :: integer-size(ll), value :: binary>>
     end
 
+    defp encrypt_value({tag,bin},attr,ctx), do: {tag,encrypt_value(bin,attr,ctx)}
+    defp encrypt_value(bin,attr,ctx), do: encrypt_value(bin,Keyword.get(attr.opts,:encrypt),ctx.auth,ctx.secret)
+    defp encrypt_value(bin,nil,_,_), do: bin
+    defp encrypt_value(bin,1,auth,secret) do
+      RadiusUtil.encrypt_rfc2865 bin,secret,auth
+    end
+    defp encrypt_value(bin,2,auth,secret) do
+      RadiusUtil.encrypt_rfc2868 bin,secret,auth
+    end
+    defp encrypt_value(bin,a,_,_) do
+      Logger.error "Unknown encrypt type: #{inspect a}"
+      bin
+    end
+
+
     defp encode_value(val,:byte)    when is_integer(val), do: <<val::size(8)>>
     defp encode_value(val,:short)   when is_integer(val), do: <<val::size(16)>>
     defp encode_value(val,:integer) when is_integer(val), do: <<val::size(32)>>
@@ -203,20 +240,21 @@ defmodule Radius do
     defp encode_value(bin,_), do: bin
 
 
+    defp remove_tlv_length({t,_l,v}), do: {t,v}
+    defp remove_tlv_length({t,v}), do: {t,v}
+
     defp resolve_attr({{type,vid},value},ctx) when type=="Vendor-Specific" or type == 26 do
       {26,encode_vsa(vid,value,ctx)}
     end
-    defp resolve_attr(tlv,ctx), do: resolve_attr(tlv,ctx,%Vendor{})
 
-    #length is ignored.
-    defp resolve_attr({type,_,value},ctx, vendor) do
-      resolve_attr({type,value},ctx, vendor)
+    defp resolve_attr(tlv,ctx) do
+      resolve_attr(tlv,ctx,%Vendor{})
     end
 
     defp resolve_attr({type,value},ctx,vendor) do
       case lookup_attr(vendor,type) do
         nil -> {type,value}
-        a   -> {a.id,lookup_value(a,value),a}
+        a   -> {a.id,lookup_value(a,value)|>encrypt_value(a,ctx),a}
       end
     end
 
@@ -235,7 +273,8 @@ defmodule Radius do
         v = Value.by_name attr.vendor.name,attr.name,val
         v.value
       rescue e in EntryNotFoundError->
-        raise "Value can not be resolved: #{attr.name}: #{val}" 
+        #raise "Value can not be resolved: #{attr.name}: #{val}" 
+        val
       end
     end
     defp lookup_value(_,val), do: val
@@ -252,12 +291,15 @@ defmodule Radius do
     defp encode_vsa(vid,vsa,ctx) when is_integer(vid), do: encode_vsa(Vendor.by_id(vid), vsa, ctx)
     defp encode_vsa(vendor, vsa, ctx) do
       val = Enum.map vsa, fn(x) ->
-        x|> resolve_attr(ctx,vendor)|> encode_attr
+        x|> remove_tlv_length() |>resolve_attr(ctx,vendor)|> encode_attr
       end
       [<<vendor.id::size(32)>>|val]
     end
 
-    defp encode_header(ctx,attrs) do
+    @doc """
+      encode reply header, calc auth hash using ctx.auth
+    """
+    defp encode_header(ctx,attrs,nil) do
       code = encode_code(ctx.code)
       length = 20 + :erlang.iolist_size attrs
       header = 
@@ -273,6 +315,18 @@ defmodule Radius do
               |> :crypto.hash_final()
 
       [header,hash]
+    end
+    @doc """
+      encode request header use given auth bytes
+    """
+    defp encode_header(ctx,attrs,auth) do
+      code = encode_code(ctx.code)
+      length = 20 + :erlang.iolist_size attrs
+      header = 
+            <<code :: integer-size(8),
+            ctx.id :: integer-size(8),
+            length :: integer-size(16) >>
+      [header,auth]
     end
     #defp encode_code(x) when is_binary(x) do 
     #  x |> String.replace("-","_")
