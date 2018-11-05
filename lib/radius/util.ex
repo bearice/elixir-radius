@@ -1,20 +1,22 @@
-defmodule RadiusUtil do
+defmodule Radius.Util do
   require Logger
+
   use Bitwise
+
   def encrypt_rfc2865(passwd,secret,auth) do
     passwd |> pad_to_16() |> hash_xor(auth,secret,[])
   end
 
   def decrypt_rfc2865(passwd,secret,auth) do
-    passwd |> hash_xor(auth,secret,[]) |> String.rstrip 0
+    passwd |> hash_xor(auth,secret,[]) |> String.trim_trailing("\0")
   end
 
   def encrypt_rfc2868(passwd,secret,auth) do
-    salt = :crypto.rand_bytes 2
+    salt = :crypto.strong_rand_bytes 2
     salt <> ( passwd |> pad_to_16() |> hash_xor(auth<>salt,secret,[]) )
   end
   def decrypt_rfc2868(<<salt::binary-size(2),passwd::binary>>,secret,auth) do
-    passwd |> hash_xor(auth<>salt,secret,[]) |> String.rstrip 0
+    passwd |> hash_xor(auth<>salt,secret,[]) |> String.trim_trailing("\0")
   end
 
   defp hash_xor(<<>>,_,_,acc) do

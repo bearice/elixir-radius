@@ -1,7 +1,6 @@
-defmodule RadiusDict do
+defmodule Radius.Dict do
   require GenServer
   require Logger
-
 
   def init(file) do
     init_ets()
@@ -64,7 +63,7 @@ defmodule RadiusDict do
     def __insert__(mod,val) do
       val = mod.on_insert val
       keys = val|> mod.index_for
-      objs = Enum.map keys, fn(x) ->
+      Enum.map keys, fn(x) ->
         if not :ets.insert_new mod,{x,val} do
           #Logger.warn "ignored duplicat #{mod}: #{inspect x} at #{val.file}:#{val.line} \nObject: #{inspect val, pretty: true}"
           :ok
@@ -78,7 +77,7 @@ defmodule RadiusDict do
       try do
         :ets.lookup_element mod, key, 2
       rescue
-        e in ArgumentError -> 
+        ArgumentError -> 
           raise EntryNotFoundError, type: mod, key: key
       end
     end
@@ -174,7 +173,7 @@ defmodule RadiusDict do
     #Logger.debug "Loading dict: #{path}" 
     try do
       File.read!(path) 
-      |> String.to_char_list 
+      |> String.to_charlist 
       |> tokenlize! 
       |> parse!
       |> (&process_dict ctx,&1).()
@@ -218,7 +217,7 @@ defmodule RadiusDict do
   defp process_dict(ctx,[{:include,name}|tail]) do
     target = ctx.path 
               |> Path.dirname 
-              |> Path.join name 
+              |> Path.join(name)
     ctx = %{ctx| path: [target|ctx.path]}
     ctx = load ctx
     ctx = %{ctx| path: Enum.drop(ctx.path,1)}

@@ -1,9 +1,11 @@
 defmodule Radius do
-  alias RadiusDict.Attribute
-  alias RadiusDict.Vendor
-  alias RadiusDict.Value
-  alias RadiusDict.EntryNotFoundError
+  alias Radius.Dict.Attribute
+  alias Radius.Dict.Vendor
+  alias Radius.Dict.Value
+  alias Radius.Dict.EntryNotFoundError
+
   require Logger
+
   defmodule Packet do
     defstruct code: nil, id: nil, length: nil, auth: nil, attrs: [], raw: nil, secret: nil
     @doc """
@@ -79,20 +81,22 @@ defmodule Radius do
       end
     end
 
-    defp resolve_tlv({type,value}=tlv, ctx, vendor) do
+    defp resolve_tlv({type, value} = tlv, ctx, vendor) do
       try do
         attr = Attribute.by_id vendor,type
         type = attr.name
         has_tag = Keyword.has_key? attr.opts, :has_tag
-        tag = case value do
+        {tag, value} = case value do
           <<0,rest::binary>> when has_tag==true -> 
-            value = rest
-            nil
+            {nil, rest}
+
           <<tag,rest::binary>> when tag in 1..0x1f and has_tag==true -> 
-            value = rest
-            tag
-          _ -> nil
+            {tag, rest}
+
+          _ ->
+            {nil, value}
         end
+        
         value = value 
                 |> decode_value(attr.type)
                 |> resolve_value(vendor,attr.id)
@@ -132,10 +136,10 @@ defmodule Radius do
     end
     defp decrypt_value(bin,nil,_,_), do: bin
     defp decrypt_value(bin,1,auth,secret) do
-      RadiusUtil.decrypt_rfc2865 bin,secret,auth
+      Radius.Util.decrypt_rfc2865 bin,secret,auth
     end
     defp decrypt_value(bin,2,auth,secret) do
-      RadiusUtil.decrypt_rfc2868 bin,secret,auth
+      Radius.Util.decrypt_rfc2868 bin,secret,auth
     end
     defp decrypt_value(bin,a,_,_) do
       Logger.error "Unknown encrypt type: #{inspect a}"
@@ -158,12 +162,12 @@ defmodule Radius do
     """
     def encode(packet) do
       ctx = Map.from_struct(packet)
-      auth = if ctx.auth == nil do
-        auth = :crypto.rand_bytes(16)
-        ctx = Dict.put ctx,:auth, auth
-        auth
+      {auth, ctx} = if ctx.auth == nil do
+        auth = :crypto.strong_rand_bytes(16)
+        ctx = Map.put ctx,:auth, auth
+        {auth, ctx}
       else
-        nil
+        {nil, ctx}
       end
 
       attrs = encode_attrs ctx
@@ -215,10 +219,10 @@ defmodule Radius do
     defp encrypt_value(bin,attr,ctx), do: encrypt_value(bin,Keyword.get(attr.opts,:encrypt),ctx.auth,ctx.secret)
     defp encrypt_value(bin,nil,_,_), do: bin
     defp encrypt_value(bin,1,auth,secret) do
-      RadiusUtil.encrypt_rfc2865 bin,secret,auth
+      Radius.Util.encrypt_rfc2865 bin,secret,auth
     end
     defp encrypt_value(bin,2,auth,secret) do
-      RadiusUtil.encrypt_rfc2868 bin,secret,auth
+      Radius.Util.encrypt_rfc2868 bin,secret,auth
     end
     defp encrypt_value(bin,a,_,_) do
       Logger.error "Unknown encrypt type: #{inspect a}"

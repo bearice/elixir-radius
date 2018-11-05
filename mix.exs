@@ -16,11 +16,8 @@ defmodule RadiusProxy.Mixfile do
   def application do
     [
       applications: [:logger,:crypto],
-      registered: [RadiusDict],
-      mod: {RadiusApp,[]},
-      env: [
-        dict: "dict/dictionary"
-      ]
+      registered: [Radius.Dict],
+      mod: {Radius.Application,[]},
     ]
   end
 
