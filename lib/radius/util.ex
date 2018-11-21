@@ -3,50 +3,76 @@ defmodule Radius.Util do
 
   use Bitwise
 
-  def encrypt_rfc2865(passwd,secret,auth) do
-    passwd |> pad_to_16() |> hash_xor(auth,secret,[])
+  def encrypt_rfc2865(passwd, secret, auth) do
+    passwd
+    |> pad_to_16()
+    |> hash_xor_encrypt(auth, secret, [])
   end
 
-  def decrypt_rfc2865(passwd,secret,auth) do
-    passwd |> hash_xor(auth,secret,[]) |> String.trim_trailing("\0")
+  def decrypt_rfc2865(passwd, secret, auth) do
+    passwd
+    |> hash_xor_decrypt(auth, secret, [])
+    |> String.trim_trailing("\0")
   end
 
-  def encrypt_rfc2868(passwd,secret,auth) do
-    salt = :crypto.strong_rand_bytes 2
-    salt <> ( passwd |> pad_to_16() |> hash_xor(auth<>salt,secret,[]) )
-  end
-  def decrypt_rfc2868(<<salt::binary-size(2),passwd::binary>>,secret,auth) do
-    passwd |> hash_xor(auth<>salt,secret,[]) |> String.trim_trailing("\0")
+  def encrypt_rfc2868(passwd, secret, auth) do
+    salt = :crypto.strong_rand_bytes(2)
+    encrypted =
+      passwd
+      |> pad_to_16()
+      |> hash_xor_encrypt(auth <> salt, secret, [])
+    salt <> encrypted
   end
 
-  defp hash_xor(<<>>,_,_,acc) do
-    acc |> Enum.reverse |> :erlang.iolist_to_binary
+  def decrypt_rfc2868(<<salt::binary-size(2), passwd::binary>>, secret, auth) do
+    passwd
+    |> hash_xor_decrypt(auth <> salt, secret, [])
+    |> String.trim_trailing("\0")
   end
-  defp hash_xor(<<txt::binary-size(16),rest::binary>>,hash,secret,acc) do
+
+  defp hash_xor_encrypt(<<>>, _, _, acc) do
+    acc |> Enum.reverse() |> :erlang.iolist_to_binary()
+  end
+  defp hash_xor_encrypt(<<block::binary-size(16), rest::binary>>, hash, secret, acc) do
     hash = :crypto.hash(:md5, secret <> hash)
-    txt = binary_xor txt,hash
-    hash_xor(rest,hash,secret,[txt|acc])
+    xor_block = binary_xor(block, hash)
+    hash_xor_encrypt(rest, xor_block, secret, [xor_block | acc])
   end
 
-  def binary_xor(x,y) when byte_size(x) == byte_size(y) do
+  defp hash_xor_decrypt(<<>>, _, _, acc) do
+    acc |> Enum.reverse() |> :erlang.iolist_to_binary()
+  end
+  defp hash_xor_decrypt(<<block::binary-size(16), rest::binary>>, hash, secret, acc) do
+    hash = :crypto.hash(:md5, secret <> hash)
+    xor_block = binary_xor(block, hash)
+    hash_xor_decrypt(rest, block, secret, [xor_block | acc])
+  end
+
+  def binary_xor(x, y) when byte_size(x) == byte_size(y) do
     s = byte_size(x) * 8
-    <<x::size(s)>>=x
-    <<y::size(s)>>=y
-    z=x^^^y
+    <<x::size(s)>> = x
+    <<y::size(s)>> = y
+    z = x ^^^ y
     <<z::size(s)>>
   end
 
-  #String.ljust will handle unicode, now bytewise
-  def pad_to_16(bin), do: pad_to_16(bin,[]) |> Enum.reverse |> :erlang.iolist_to_binary
-  def pad_to_16(bin,acc) when byte_size(bin) == 16 do
-    [bin|acc]
+  def pad_to_16(bin) do
+    pad_to_16(bin, [])
+    |> Enum.reverse
+    |> :erlang.iolist_to_binary()
   end
-  def pad_to_16(bin,acc) when byte_size(bin) < 16 do
+
+  def pad_to_16(bin, acc) when byte_size(bin) == 16 do
+    [bin | acc]
+  end
+
+  def pad_to_16(bin, acc) when byte_size(bin) < 16 do
     bin = <<bin::binary,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>
-    <<chunk::binary-size(16),_::binary>>=bin
-    [chunk|acc]
+    <<chunk::binary-size(16), _::binary>> = bin
+    [chunk | acc]
   end
-  def pad_to_16(<<chunk::binary-size(16),rest::binary>>,acc) do
-    pad_to_16(rest,[chunk|acc])
+
+  def pad_to_16(<<chunk::binary-size(16), rest::binary>>, acc) do
+    pad_to_16(rest, [chunk | acc])
   end
 end
