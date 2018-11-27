@@ -5,15 +5,15 @@ defmodule RadiusProxy.Mixfile do
     [app: :elixir_radius,
      version: "0.1.0",
      elixir: "~> 1.0",
-     description: desc,
-     package: package,
-     deps: deps]
+     description: desc(),
+     package: package(),
+     deps: deps()]
   end
 
   # Configuration for the OTP application
   #
   # Type `mix help compile.app` for more information
-  def application do
+  def application() do
     [
       applications: [:logger,:crypto],
       registered: [Radius.Dict],
@@ -30,19 +30,19 @@ defmodule RadiusProxy.Mixfile do
   #   {:mydep, git: "https://github.com/elixir-lang/mydep.git", tag: "0.1.0"}
   #
   # Type `mix help deps` for more examples and options
-  defp deps do
+  defp deps() do
     [
       {:earmark, "~> 0.1", only: :dev},
       {:ex_doc, "~> 0.6", only: :dev}
       #  {:socket,"~> 0.2.8"}
     ]
   end
-  defp desc do
+  defp desc() do
     """
     Decode & encode RADIUS packets
     """
   end
-  defp package do
+  defp package() do
     [
       files: ["lib","src","mix.exs","example.exs","README.md","LICENSE","dict"],
       contributors: ["Bearice Ren"],
