@@ -8,8 +8,21 @@ defmodule Radius do
 
   defmodule Packet do
     defstruct code: nil, id: nil, length: nil, auth: nil, attrs: [], raw: nil, secret: nil
+
     @doc """
-      Decode radius packet
+    Create a new packet
+    """
+    def new(code, id, secret) do
+      %__MODULE__{
+        code: code,
+        id: id,
+        auth: :crypto.strong_rand_bytes(16),
+        secret: secret,
+      }
+    end
+
+    @doc """
+    Decode radius packet
     """
     def decode(data,secret) do
       pkt = %{raw: data, secret: secret, attrs: nil}
