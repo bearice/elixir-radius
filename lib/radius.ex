@@ -161,26 +161,29 @@ defmodule Radius do
           ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
 
     """
-    def encode(packet) do
-      ctx = Map.from_struct(packet)
-      {auth, ctx} = if ctx.auth == nil do
+    def encode(packet, options \\ []) do
+      {auth, packet} = if packet.auth == nil do
         auth = :crypto.strong_rand_bytes(16)
-        ctx = Map.put ctx,:auth, auth
-        {auth, ctx}
+        {auth, %{packet | auth: auth}}
       else
-        {nil, ctx}
+        {nil, packet}
       end
 
-      attrs = encode_attrs ctx
-      header = encode_header ctx,attrs,auth
-      [header,attrs]
+      packet = if options |> Keyword.get(:sign, false) do
+        packet |> sign()
+      else
+        packet
+      end
+
+      attrs = encode_attrs(packet)
+      header = encode_header(packet, attrs, auth)
+      [header, attrs]
     end
 
     def encode_raw(packet) do
-      ctx = Map.from_struct(packet)
-      attrs = encode_attrs ctx
-      header = encode_header ctx,attrs,ctx.auth
-      [header,attrs]
+      attrs = encode_attrs(packet)
+      header = encode_header(packet, attrs, packet.auth)
+      [header, attrs]
     end
 
     defp encode_attrs(%{attrs: a}=ctx) do
@@ -389,12 +392,20 @@ defmodule Radius do
     Verify if the packet signature is valid.
     """
     def verify(packet) do
-      signed = packet |> sign()
+      sig1 =
+        packet
+        |> Radius.Packet.get_attr("Message-Authenticator")
 
-      sig1 = packet |> Radius.Packet.get_attr("Message-Authenticator")
-      sig2 = signed |> Radius.Packet.get_attr("Message-Authenticator")
+      if sig1 != nil do
+        sig2 =
+          packet
+          |> sign()
+          |> Radius.Packet.get_attr("Message-Authenticator")
 
-      sig1 == sig2
+        sig1 == sig2
+      else
+        false
+      end
     end
   end #defmodule Packet
 
