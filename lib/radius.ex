@@ -12,7 +12,7 @@ defmodule Radius do
       Decode radius packet
     """
     def decode(data,secret) do
-      pkt = %{raw: data, secret: secret, attrs: nil} 
+      pkt = %{raw: data, secret: secret, attrs: nil}
         |> decode_header
         |> decode_payload
       struct Packet,pkt
@@ -39,7 +39,7 @@ defmodule Radius do
     defp decode_code(12), do: "Status-Server"
     defp decode_code(13), do: "Status-Client"
     defp decode_code(x),  do: x
- 
+
     defp decode_payload(ctx) do
       decode_tlv(ctx.rest,[],{1,1}) |> resolve_tlv(ctx)
     end
@@ -87,17 +87,17 @@ defmodule Radius do
         type = attr.name
         has_tag = Keyword.has_key? attr.opts, :has_tag
         {tag, value} = case value do
-          <<0,rest::binary>> when has_tag==true -> 
+          <<0,rest::binary>> when has_tag==true ->
             {nil, rest}
 
-          <<tag,rest::binary>> when tag in 1..0x1f and has_tag==true -> 
+          <<tag,rest::binary>> when tag in 1..0x1f and has_tag==true ->
             {tag, rest}
 
           _ ->
             {nil, value}
         end
-        
-        value = value 
+
+        value = value
                 |> decode_value(attr.type)
                 |> resolve_value(vendor,attr.id)
                 |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
@@ -153,9 +153,9 @@ defmodule Radius do
       for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
 
           packet.attrs :: [attr]
-          attr :: {type,value} 
+          attr :: {type,value}
           type :: String.t | integer | {"Vendor-Specific", vendor}
-          value :: integer | String.t | ipaddr 
+          value :: integer | String.t | ipaddr
           vendor :: String.t | integer
           ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
 
@@ -172,10 +172,17 @@ defmodule Radius do
 
       attrs = encode_attrs ctx
       header = encode_header ctx,attrs,auth
-      [header,attrs] 
+      [header,attrs]
     end
 
-    defp encode_attrs(%{attrs: a}=ctx) do 
+    def encode_raw(packet) do
+      ctx = Map.from_struct(packet)
+      attrs = encode_attrs ctx
+      header = encode_header ctx,attrs,ctx.auth
+      [header,attrs]
+    end
+
+    defp encode_attrs(%{attrs: a}=ctx) do
       Enum.map a, fn(x) ->
         x |> resolve_attr(ctx) |> encode_attr
       end
@@ -261,14 +268,14 @@ defmodule Radius do
 
     defp lookup_attr(vendor,type) when is_integer(type) do
       try do
-        Attribute.by_id vendor.id,type 
-      rescue 
+        Attribute.by_id vendor.id,type
+      rescue
         _e in EntryNotFoundError -> nil
       end
     end
     #Raise an error if attr not defined
     defp lookup_attr(_vendor,type) when is_binary(type) do
-      Attribute.by_name type 
+      Attribute.by_name type
     end
 
     defp lookup_value(attr,{tag,val}) do
@@ -279,7 +286,7 @@ defmodule Radius do
         v = Value.by_name attr.vendor.name,attr.name,val
         v.value
       rescue _e in EntryNotFoundError->
-        #raise "Value can not be resolved: #{attr.name}: #{val}" 
+        #raise "Value can not be resolved: #{attr.name}: #{val}"
         val
       end
     end
@@ -301,7 +308,7 @@ defmodule Radius do
     defp encode_header(ctx,attrs,nil) do
       code = encode_code(ctx.code)
       length = 20 + :erlang.iolist_size attrs
-      header = 
+      header =
             <<code :: integer-size(8),
             ctx.id :: integer-size(8),
             length :: integer-size(16) >>
@@ -315,12 +322,12 @@ defmodule Radius do
 
       [header,hash]
     end
-    
+
     #encode request header use given auth bytes
     defp encode_header(ctx,attrs,auth) do
       code = encode_code(ctx.code)
       length = 20 + :erlang.iolist_size attrs
-      header = 
+      header =
             <<code :: integer-size(8),
             ctx.id :: integer-size(8),
             length :: integer-size(16) >>
@@ -336,6 +343,58 @@ defmodule Radius do
     defp encode_code("Accounting-Response"), do: 5
     defp encode_code("Status-Server"), do: 12
     defp encode_code("Status-Client"), do: 13
+
+    @doc """
+    Return the value of a given attribute, if found, or default otherwise.
+    """
+    def get_attr(packet, attr_name, default \\ nil) do
+      {_, result} =
+        packet.attrs
+        |> Enum.find(default, fn
+          {^attr_name, _} -> true
+          _ -> false
+        end)
+      result
+    end
+
+    @doc """
+    Calculate and append a Message-Authenticator attribute to the packet.
+    """
+    def sign(packet) do
+      no_msg_auth =
+        packet.attrs
+        |> Enum.filter(fn
+          {"Message-Authenticator", _} -> false
+          _ -> true
+        end)
+
+      new_attrs =
+        no_msg_auth ++ [
+          {"Message-Authenticator", <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>}
+        ]
+
+      raw =
+        %{packet | attrs: new_attrs}
+        |> Radius.Packet.encode_raw()
+        |> IO.iodata_to_binary()
+
+      signature = :crypto.hmac(:md5, packet.secret, raw)
+      %{packet | attrs: no_msg_auth ++ [
+        {"Message-Authenticator", signature}
+      ]}
+    end
+
+    @doc """
+    Verify if the packet signature is valid.
+    """
+    def verify(packet) do
+      signed = packet |> sign()
+
+      sig1 = packet |> Radius.Packet.get_attr("Message-Authenticator")
+      sig2 = signed |> Radius.Packet.get_attr("Message-Authenticator")
+
+      sig1 == sig2
+    end
   end #defmodule Packet
 
   @doc """

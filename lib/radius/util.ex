@@ -41,7 +41,7 @@ defmodule Radius.Util do
     hash_xor(rest, next, secret, [xor_block | acc])
   end
 
-  def binary_xor(x, y) when byte_size(x) == byte_size(y) do
+  defp binary_xor(x, y) when byte_size(x) == byte_size(y) do
     s = byte_size(x) * 8
     <<x::size(s)>> = x
     <<y::size(s)>> = y
@@ -49,18 +49,18 @@ defmodule Radius.Util do
     <<z::size(s)>>
   end
 
-  def pad_to_16(bin) do
+  defp pad_to_16(bin) do
     pad_to_16(bin, [])
     |> Enum.reverse
     |> :erlang.iolist_to_binary()
   end
 
-  def pad_to_16(bin, acc) when byte_size(bin) == 16, do: [bin | acc]
-  def pad_to_16(bin, acc) when byte_size(bin) < 16 do
-    bin = <<bin::binary,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>
+  defp pad_to_16(bin, acc) when byte_size(bin) == 16, do: [bin | acc]
+  defp pad_to_16(bin, acc) when byte_size(bin) < 16 do
+    bin = <<bin::binary,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>
     <<chunk::binary-size(16), _::binary>> = bin
     [chunk | acc]
   end
-  def pad_to_16(<<chunk::binary-size(16), rest::binary>>, acc),
+  defp pad_to_16(<<chunk::binary-size(16), rest::binary>>, acc),
     do: pad_to_16(rest, [chunk | acc])
 end
