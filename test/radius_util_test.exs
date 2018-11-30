@@ -54,17 +54,21 @@ defmodule Radius.UtilTest do
 
   test "Message-Authenticator" do
     packet = Radius.Packet.decode(@sample_packet, @secret)
-    raw = packet |> Radius.Packet.encode_raw() |> IO.iodata_to_binary()
+    raw = packet |> Radius.Packet.encode(raw: true) |> IO.iodata_to_binary()
     assert raw == @sample_packet
 
-    signed = packet|> Radius.Packet.sign()
+    signed =
+      packet
+      |> Radius.Packet.encode(raw: true, sign: true)
+      |> IO.iodata_to_binary()
+      |> Radius.Packet.decode(@secret)
 
     sig1 = packet |> Radius.Packet.get_attr("Message-Authenticator")
     sig2 = signed |> Radius.Packet.get_attr("Message-Authenticator")
 
     assert sig1 == sig2
 
-    raw = signed |> Radius.Packet.encode_raw() |> IO.iodata_to_binary
+    raw = signed |> Radius.Packet.encode(raw: true) |> IO.iodata_to_binary
 
     assert raw == @sample_packet
 
