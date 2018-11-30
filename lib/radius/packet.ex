@@ -174,48 +174,53 @@ defmodule Radius.Packet do
 
   """
   def encode(packet, options \\ []) do
-    {auth, packet} = cond do
-      options |> Keyword.get(:raw) == true ->
-        {packet.auth, packet}  # no changes on the packet
-
-      packet.auth == nil ->
-        auth = :crypto.strong_rand_bytes(16)
-        {auth, %{packet | auth: auth}}
-
-      true ->
-        {nil, packet}
+    sign? = options |> Keyword.get(:sign, false)
+    raw? = options |> Keyword.get(:raw, false)
+    {auth, reply?} = if packet.auth == nil do
+      {:crypto.strong_rand_bytes(16), false}
+    else
+      {packet.auth, true}
     end
 
-    packet = if options |> Keyword.get(:sign) do
-      no_msg_auth =
-        packet.attrs
-        |> Enum.filter(fn
-          {"Message-Authenticator", _} -> false
-          _ -> true
-        end)
-
-      %{packet | attrs: no_msg_auth ++ [
-        {"Message-Authenticator", <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>}
-      ]}
+    packet = if sign? do
+      attrs =
+        packet.attrs ++ [
+          {"Message-Authenticator", <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>}
+        ]
+      %{packet | attrs: attrs}
     else
       packet
     end
 
     attrs = encode_attrs(packet)
-    header = encode_header(packet, attrs, auth)
 
-    if options |> Keyword.get(:sign) do
-      raw =
-        [header, attrs]
-        |> IO.iodata_to_binary()
+    code = encode_code(packet.code)
+    length = 20 + :erlang.iolist_size(attrs)
+    header = <<code, packet.id, length::size(16), auth::binary>>
 
-      signature = :crypto.hmac(:md5, packet.secret, raw)
-      crop_len = byte_size(raw) - 16
-
-      [<<raw::bytes-size(crop_len)>>, signature]
+    attrs = if sign? do
+      signature = :crypto.hmac(:md5, packet.secret, [header, attrs])
+      [last | attrs] = attrs |> Enum.reverse()
+      crop_len = byte_size(last) - 16
+      last = <<last::bytes-size(crop_len), signature::binary>>
+      [last | attrs] |> Enum.reverse()
     else
-      [header, attrs]
+      attrs
     end
+
+    header = if reply? and raw? == false do
+      resp_auth =
+        :crypto.hash_init(:md5)
+        |> :crypto.hash_update(header)
+        |> :crypto.hash_update(attrs)
+        |> :crypto.hash_update(packet.secret)
+        |> :crypto.hash_final()
+      <<header::bytes-size(4), resp_auth::binary>>
+    else
+      header
+    end
+
+    [header, attrs]
   end
 
   defp encode_attrs(%{attrs: a}=ctx) do
@@ -340,35 +345,6 @@ defmodule Radius.Packet do
     [<<vendor.id::size(32)>>|val]
   end
 
-  #encode reply header, calc auth hash using ctx.auth
-  defp encode_header(ctx, attrs, nil) do
-    code = encode_code(ctx.code)
-    length = 20 + :erlang.iolist_size attrs
-    header = <<code :: integer-size(8),
-               ctx.id :: integer-size(8),
-               length :: integer-size(16)>>
-
-    hash = :crypto.hash_init(:md5)
-            |> :crypto.hash_update(header)
-            |> :crypto.hash_update(ctx.auth)
-            |> :crypto.hash_update(attrs)
-            |> :crypto.hash_update(ctx.secret)
-            |> :crypto.hash_final()
-
-    [header, hash]
-  end
-
-  #encode request header use given auth bytes
-  defp encode_header(ctx, attrs, auth) do
-    code = encode_code(ctx.code)
-    length = 20 + :erlang.iolist_size attrs
-    header = <<code :: integer-size(8),
-               ctx.id :: integer-size(8),
-               length :: integer-size(16)>>
-
-    [header, auth]
-  end
-
   defp encode_code(x) when is_integer(x), do: x
   defp encode_code("Access-Request"), do: 1
   defp encode_code("Access-Accept"), do: 2
@@ -396,13 +372,18 @@ defmodule Radius.Packet do
   Verify if the packet signature is valid.
   """
   def verify(packet) do
+    # TODO: this code is going to fail when validating replies
     sig1 =
       packet
       |> Radius.Packet.get_attr("Message-Authenticator")
 
     if sig1 != nil do
+      attrs =
+        packet.attrs
+        |> Enum.filter(fn {k, _} -> k != "Message-Authenticator" end)
+
       raw =
-        packet
+        %{packet | attrs: attrs}
         |> Radius.Packet.encode(raw: true, sign: true)
         |> IO.iodata_to_binary
 

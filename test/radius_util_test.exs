@@ -57,9 +57,13 @@ defmodule Radius.UtilTest do
     raw = packet |> Radius.Packet.encode(raw: true) |> IO.iodata_to_binary()
     assert raw == @sample_packet
 
+    attrs =
+      packet.attrs
+      |> Enum.filter(fn {k, _} -> k != "Message-Authenticator" end)
+
     signed =
-      packet
-      |> Radius.Packet.encode(raw: true, sign: true)
+      %{packet | attrs: attrs}
+      |> Radius.Packet.encode(sign: true, raw: true)
       |> IO.iodata_to_binary()
       |> Radius.Packet.decode(@secret)
 
