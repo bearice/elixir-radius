@@ -359,13 +359,17 @@ defmodule Radius.Packet do
   Return the value of a given attribute, if found, or default otherwise.
   """
   def get_attr(packet, attr_name, default \\ nil) do
-    {_, result} =
+    result =
       packet.attrs
       |> Enum.find(default, fn
         {^attr_name, _} -> true
         _ -> false
       end)
-    result
+
+    case result do
+      {_, value} -> value
+      _ -> nil
+    end
   end
 
   @doc """
