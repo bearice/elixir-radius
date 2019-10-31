@@ -181,7 +181,7 @@ defmodule Radius.Packet do
     else
       {packet.auth, true}
     end
-
+    packet = %{packet | auth: auth}
     packet = if sign? do
       attrs =
         packet.attrs ++ [
