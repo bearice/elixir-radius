@@ -3,7 +3,7 @@ defmodule RadiusProxy.Mixfile do
 
   def project do
     [app: :elixir_radius,
-     version: "0.1.0",
+     version: "1.0.0",
      elixir: "~> 1.0",
      description: desc(),
      package: package(),
@@ -45,7 +45,7 @@ defmodule RadiusProxy.Mixfile do
   defp package() do
     [
       files: ["lib","src","mix.exs","example.exs","README.md","LICENSE","dict"],
-      contributors: ["Bearice Ren"],
+      contributors: ["Bearice Ren","Guilherme Balena Versiani"],
       licenses: ["MIT License"],
       links: %{"Github" => "https://github.com/bearice/elixir-radius"}
     ]
