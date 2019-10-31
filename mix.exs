@@ -32,8 +32,8 @@ defmodule RadiusProxy.Mixfile do
   # Type `mix help deps` for more examples and options
   defp deps() do
     [
-      {:earmark, "~> 0.1", only: :dev},
-      {:ex_doc, "~> 0.6", only: :dev}
+      {:earmark, "~> 1.4", only: :dev},
+      {:ex_doc, "~> 0.19", only: :dev}
       #  {:socket,"~> 0.2.8"}
     ]
   end
@@ -44,7 +44,7 @@ defmodule RadiusProxy.Mixfile do
   end
   defp package() do
     [
-      files: ["lib","src","mix.exs","example.exs","README.md","LICENSE","dict"],
+      files: ["lib","src","mix.exs","example.exs","README.md","LICENSE","priv"],
       contributors: ["Bearice Ren","Guilherme Balena Versiani"],
       licenses: ["MIT License"],
       links: %{"Github" => "https://github.com/bearice/elixir-radius"}
