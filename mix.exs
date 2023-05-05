@@ -49,7 +49,7 @@ defmodule RadiusProxy.Mixfile do
   defp package() do
     [
       files: ["lib", "src", "mix.exs", "example.exs", "README.md", "LICENSE", "priv"],
-      contributors: ["Bearice Ren", "Guilherme Balena Versiani"],
+      contributors: ["Bearice Ren", "Guilherme Balena Versiani", "Timmo Verlaan"],
       licenses: ["MIT License"],
       links: %{"Github" => "https://github.com/bearice/elixir-radius"}
     ]
