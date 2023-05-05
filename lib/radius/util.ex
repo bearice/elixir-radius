@@ -17,10 +17,12 @@ defmodule Radius.Util do
 
   def encrypt_rfc2868(passwd, secret, auth) do
     salt = :crypto.strong_rand_bytes(2)
+
     encrypted =
       passwd
       |> pad_to_16()
       |> hash_xor(auth <> salt, secret, [])
+
     salt <> encrypted
   end
 
@@ -31,9 +33,11 @@ defmodule Radius.Util do
   end
 
   defp hash_xor(input, hash, secret, acc, opts \\ [])
+
   defp hash_xor(<<>>, _, _, acc, _) do
     acc |> Enum.reverse() |> :erlang.iolist_to_binary()
   end
+
   defp hash_xor(<<block::binary-size(16), rest::binary>>, hash, secret, acc, opts) do
     hash = :crypto.hash(:md5, secret <> hash)
     xor_block = binary_xor(block, hash)
@@ -51,16 +55,18 @@ defmodule Radius.Util do
 
   defp pad_to_16(bin) do
     pad_to_16(bin, [])
-    |> Enum.reverse
+    |> Enum.reverse()
     |> :erlang.iolist_to_binary()
   end
 
   defp pad_to_16(bin, acc) when byte_size(bin) == 16, do: [bin | acc]
+
   defp pad_to_16(bin, acc) when byte_size(bin) < 16 do
-    bin = <<bin::binary,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>
+    bin = <<bin::binary, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
     <<chunk::binary-size(16), _::binary>> = bin
     [chunk | acc]
   end
+
   defp pad_to_16(<<chunk::binary-size(16), rest::binary>>, acc),
     do: pad_to_16(rest, [chunk | acc])
 end

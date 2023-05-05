@@ -5,7 +5,7 @@ defmodule Radius do
     wrapper of gen_udp.open
   """
   def listen(port) do
-    :gen_udp.open(port, [{:active, :false}, {:mode, :binary}])
+    :gen_udp.open(port, [{:active, false}, {:mode, :binary}])
   end
 
   @doc """
@@ -15,8 +15,9 @@ defmodule Radius do
         secret :: string | fn({host,port}) -> string
   """
   def recv(sk, secret) when is_binary(secret) do
-    recv(sk, fn(_) -> secret end)
+    recv(sk, fn _ -> secret end)
   end
+
   def recv(sk, secret_fn) when is_function(secret_fn) do
     {:ok, {host, port, data}} = :gen_udp.recv(sk, 5000)
     secret = secret_fn.({host, port})

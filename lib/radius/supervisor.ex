@@ -9,10 +9,11 @@ defmodule Radius.Supervisor do
     dict =
       [Application.app_dir(:elixir_radius), "priv", "dictionary"]
       |> Path.join()
-      
+
     children = [
       worker(Radius.Dict, [dict])
     ]
+
     supervise(children, strategy: :one_for_one)
   end
 end
