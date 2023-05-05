@@ -5,7 +5,7 @@ defmodule RadiusProxy.Mixfile do
     [
       app: :elixir_radius,
       version: "1.0.0",
-      elixir: "~> 1.0",
+      elixir: "~> 1.12",
       description: desc(),
       package: package(),
       deps: deps()
