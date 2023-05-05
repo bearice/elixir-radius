@@ -1,7 +1,6 @@
 defmodule Radius.Util do
   require Logger
-
-  use Bitwise
+  import Bitwise
 
   def encrypt_rfc2865(passwd, secret, auth) do
     passwd
@@ -49,7 +48,7 @@ defmodule Radius.Util do
     s = byte_size(x) * 8
     <<x::size(s)>> = x
     <<y::size(s)>> = y
-    z = x ^^^ y
+    z = bxor(x, y)
     <<z::size(s)>>
   end
 
