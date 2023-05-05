@@ -217,8 +217,8 @@ defmodule Radius.Dict do
       |> parse!
       |> (&process_dict(ctx, &1)).()
     rescue
-      e in ParserError -> reraise %{e | file: path}, System.stacktrace()
-      e -> reraise e, System.stacktrace()
+      e in ParserError -> reraise %{e | file: path}, __STACKTRACE__
+      e -> reraise e, __STACKTRACE__
     after
       Logger.flush()
     end
