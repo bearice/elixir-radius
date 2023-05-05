@@ -11,9 +11,9 @@ defmodule Radius.Supervisor do
       |> Path.join()
 
     children = [
-      worker(Radius.Dict, [dict])
+      {Radius.Dict, dict}
     ]
 
-    supervise(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 end
