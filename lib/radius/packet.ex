@@ -230,7 +230,7 @@ defmodule Radius.Packet do
 
     attrs =
       if sign? do
-        signature = :crypto.hmac(:md5, packet.secret, [header, attrs])
+        signature = :crypto.mac(:hmac, :md5, packet.secret, [header, attrs])
         [last | attrs] = attrs |> Enum.reverse()
         crop_len = byte_size(last) - 16
         last = <<last::bytes-size(crop_len), signature::binary>>
@@ -391,7 +391,7 @@ defmodule Radius.Packet do
     do: encode_vsa(Vendor.by_name(vid).id, value, ctx)
 
   defp encode_vsa(vid, value, _) when is_binary(value) and is_integer(vid),
-    do: <<vid::size(32), value>>
+    do: <<vid::size(32), value::binary>>
 
   defp encode_vsa(vid, vsa, ctx) when is_tuple(vsa), do: encode_vsa(vid, [vsa], ctx)
 
