@@ -25,8 +25,8 @@ jobs:
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.12.3' # Define the elixir version [required]
-        otp-version: '24.1' # Define the OTP version [required]
+        elixir-version: '1.14' # Define the elixir version [required]
+        otp-version: '25' # Define the OTP version [required]
     - name: Restore dependencies cache
       uses: actions/cache@v3
       with:
