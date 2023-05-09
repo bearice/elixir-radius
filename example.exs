@@ -38,21 +38,21 @@ attrs = [
   {255, "123456"}
 ]
 
-# for request packets, leave auth=nil will generate with random bytes
-p = %Radius.Packet{code: "Access-Request", id: 12, auth: nil, secret: secret, attrs: attrs}
+# for request packets, authenticator will generate with random bytes
+p = %Radius.Packet{code: "Access-Request", id: 12, secret: secret, attrs: attrs}
 # will return an iolist
-data = Radius.Packet.encode(p)
-Logger.debug("data=#{inspect(data)}")
+%{raw: data} = Radius.Packet.encode_request(p)
+Logger.debug("data=#{inspect(packet.raw)}")
 
 p = Radius.Packet.decode(:erlang.iolist_to_binary(data), secret)
 Logger.debug(inspect(p, pretty: true))
 
-# for response packets, set auth=request.auth to generate new HMAC-hash with it.
-p = %Radius.Packet{code: "Access-Accept", id: 12, auth: p.auth, secret: secret, attrs: p.attrs}
-data = Radius.Packet.encode(p)
+# for response packets, provide request.auth to generate new HMAC-hash with it.
+p2 = %Radius.Packet{code: "Access-Accept", id: 12, secret: secret, attrs: p.attrs}
+%{raw: data} = Radius.Packet.encode_reply(p2, p.auth)
 Logger.debug("data=#{inspect(data)}")
 # password decoding SHOULD FAIL here, guess why?
-p = Radius.Packet.decode(:erlang.iolist_to_binary(data), p.secret)
+p = Radius.Packet.decode(:erlang.iolist_to_binary(data), p2.secret)
 Logger.debug(inspect(p, pretty: true))
 
 # wrapper of gen_udp

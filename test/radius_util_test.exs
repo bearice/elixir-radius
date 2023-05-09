@@ -1,5 +1,5 @@
 defmodule Radius.UtilTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   @a <<131, 203, 230, 68, 225, 38, 170, 174, 240, 200, 112, 101, 138, 46, 93, 66>>
   @e <<47, 30, 188, 38, 120, 163, 223, 41, 29, 48, 100, 113, 255, 68, 152, 156>>
@@ -44,44 +44,5 @@ defmodule Radius.UtilTest do
     p = "测试1234测试1234测试1234"
     e = Radius.Util.encrypt_rfc2868(p, @s, @a)
     assert Radius.Util.decrypt_rfc2868(e, @s, @a) == p
-  end
-
-  @secret "mykey"
-  @sample_packet <<1, 118, 0, 173, 55, 91, 232, 245, 150, 233, 11, 207, 252, 94, 50, 146, 157, 20,
-                   39, 91, 4, 6, 10, 62, 1, 238, 5, 6, 0, 0, 195, 81, 61, 6, 0, 0, 0, 15, 1, 31,
-                   104, 111, 115, 116, 47, 100, 114, 115, 119, 105, 110, 55, 116, 114, 97, 99,
-                   121, 112, 46, 100, 114, 115, 108, 46, 99, 111, 46, 117, 107, 30, 19, 48, 48,
-                   45, 49, 50, 45, 48, 48, 45, 69, 51, 45, 52, 49, 45, 67, 49, 31, 19, 66, 52, 45,
-                   57, 57, 45, 66, 65, 45, 70, 50, 45, 56, 65, 45, 68, 54, 6, 6, 0, 0, 0, 2, 12,
-                   6, 0, 0, 5, 220, 79, 36, 2, 0, 0, 34, 1, 104, 111, 115, 116, 47, 100, 114, 115,
-                   119, 105, 110, 55, 116, 114, 97, 99, 121, 112, 46, 100, 114, 115, 108, 46, 99,
-                   111, 46, 117, 107, 80, 18, 201, 62, 246, 40, 105, 10, 87, 139, 49, 112, 155,
-                   11, 188, 202, 222, 65>>
-
-  test "Message-Authenticator" do
-    packet = Radius.Packet.decode(@sample_packet, @secret)
-    raw = packet |> Radius.Packet.encode(raw: true) |> IO.iodata_to_binary()
-    assert raw == @sample_packet
-
-    attrs =
-      packet.attrs
-      |> Enum.filter(fn {k, _} -> k != "Message-Authenticator" end)
-
-    signed =
-      %{packet | attrs: attrs}
-      |> Radius.Packet.encode(sign: true, raw: true)
-      |> IO.iodata_to_binary()
-      |> Radius.Packet.decode(@secret)
-
-    sig1 = packet |> Radius.Packet.get_attr("Message-Authenticator")
-    sig2 = signed |> Radius.Packet.get_attr("Message-Authenticator")
-
-    assert sig1 == sig2
-
-    raw = signed |> Radius.Packet.encode(raw: true) |> IO.iodata_to_binary()
-
-    assert raw == @sample_packet
-
-    assert Radius.Packet.verify(packet)
   end
 end

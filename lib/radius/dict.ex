@@ -215,7 +215,7 @@ defmodule Radius.Dict do
       |> String.to_charlist()
       |> tokenlize!
       |> parse!
-      |> (&process_dict(ctx, &1)).()
+      |> then(&process_dict(ctx, &1))
     rescue
       e in ParserError -> reraise %{e | file: path}, __STACKTRACE__
       e -> reraise e, __STACKTRACE__
