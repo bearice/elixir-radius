@@ -34,38 +34,31 @@ defmodule Radius.Util do
   defp hash_xor(input, hash, secret, acc, opts \\ [])
 
   defp hash_xor(<<>>, _, _, acc, _) do
-    acc |> Enum.reverse() |> :erlang.iolist_to_binary()
+    acc |> Enum.reverse() |> IO.iodata_to_binary()
   end
 
-  defp hash_xor(<<block::binary-size(16), rest::binary>>, hash, secret, acc, opts) do
+  @block_binary_size 16
+  @block_size @block_binary_size * 8
+  defp hash_xor(<<block::binary-size(@block_binary_size), rest::binary>>, hash, secret, acc, opts) do
     hash = :crypto.hash(:md5, secret <> hash)
     xor_block = binary_xor(block, hash)
     next = if(opts |> Keyword.get(:reverse, false), do: block, else: xor_block)
     hash_xor(rest, next, secret, [xor_block | acc])
   end
 
-  defp binary_xor(x, y) when byte_size(x) == byte_size(y) do
-    s = byte_size(x) * 8
-    <<x::size(s)>> = x
-    <<y::size(s)>> = y
+  defp binary_xor(<<x::size(@block_size)>>, <<y::size(@block_size)>>) do
     z = bxor(x, y)
-    <<z::size(s)>>
+    <<z::size(@block_size)>>
   end
 
   defp pad_to_16(bin) do
-    pad_to_16(bin, [])
-    |> Enum.reverse()
-    |> :erlang.iolist_to_binary()
+    remainder = Integer.mod(byte_size(bin), 16)
+
+    if remainder == 0 do
+      bin
+    else
+      padding = 16 - remainder
+      <<bin::binary, 0::size(padding * 8)>>
+    end
   end
-
-  defp pad_to_16(bin, acc) when byte_size(bin) == 16, do: [bin | acc]
-
-  defp pad_to_16(bin, acc) when byte_size(bin) < 16 do
-    bin = <<bin::binary, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
-    <<chunk::binary-size(16), _::binary>> = bin
-    [chunk | acc]
-  end
-
-  defp pad_to_16(<<chunk::binary-size(16), rest::binary>>, acc),
-    do: pad_to_16(rest, [chunk | acc])
 end
