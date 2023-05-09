@@ -1,11 +1,21 @@
 defmodule Radius.Packet do
   require Logger
 
+  alias __MODULE__
   alias Radius.Dict.Attribute
   alias Radius.Dict.Vendor
   alias Radius.Dict.Value
   alias Radius.Dict.EntryNotFoundError
 
+  @type t :: %{
+          code: String.t(),
+          id: integer(),
+          length: integer(),
+          auth: binary(),
+          attrs: keyword(),
+          raw: iolist(),
+          secret: binary()
+        }
   defstruct code: nil,
             id: nil,
             length: nil,
@@ -196,6 +206,7 @@ defmodule Radius.Packet do
         ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
 
   """
+  @deprecated "Use encode_request/1-2 or encode_reply/1-2 instead"
   def encode(packet, options \\ []) do
     sign? = options |> Keyword.get(:sign, false)
     raw? = options |> Keyword.get(:raw, false)
@@ -211,11 +222,7 @@ defmodule Radius.Packet do
 
     packet =
       if sign? do
-        attrs =
-          packet.attrs ++
-            [
-              {"Message-Authenticator", <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>}
-            ]
+        attrs = packet.attrs ++ [{"Message-Authenticator", <<0::size(128)>>}]
 
         %{packet | attrs: attrs}
       else
@@ -254,6 +261,77 @@ defmodule Radius.Packet do
       end
 
     [header, attrs]
+  end
+
+  @doc """
+  Encode the request packet into an iolist and put the result in the `:raw` key. The `:auth` key will contain
+  the authenticator used on the request.
+  """
+  @spec encode_request(packet :: Packet.t(), options :: keyword()) :: Packet.t()
+  def encode_request(packet, options \\ []) do
+    packet = %{packet | auth: :crypto.strong_rand_bytes(16)}
+    {header, attrs} = encode_packet(packet, options)
+
+    %{packet | raw: [header, attrs]}
+  end
+
+  @doc """
+  Encode the reply packet into an iolist and put the result in the `:raw` key. The `:auth` key needs
+  to be filled with the authenticator of the request packet.
+  """
+  @spec encode_reply(
+          packet :: Packet.t(),
+          request_authenticator :: binary(),
+          options :: keyword()
+        ) :: Packet.t()
+  def encode_reply(packet, request_authenticator, options \\ []) do
+    packet = %{packet | auth: request_authenticator}
+    {header, attrs} = encode_packet(packet, options)
+
+    resp_auth =
+      :crypto.hash_init(:md5)
+      |> :crypto.hash_update(header)
+      |> :crypto.hash_update(attrs)
+      |> :crypto.hash_update(packet.secret)
+      |> :crypto.hash_final()
+
+    header = <<header::bytes-size(4), resp_auth::binary>>
+
+    %{packet | auth: resp_auth, raw: [header, attrs]}
+  end
+
+  defp encode_packet(packet, options) do
+    sign? = options |> Keyword.get(:sign, false)
+
+    packet =
+      if sign? do
+        attrs = [{"Message-Authenticator", <<0::size(128)>>} | packet.attrs]
+
+        %{packet | attrs: attrs}
+      else
+        packet
+      end
+
+    attrs = encode_attrs(packet)
+
+    code = encode_code(packet.code)
+    length = 20 + IO.iodata_length(attrs)
+    header = <<code, packet.id, length::size(16), packet.auth::binary>>
+
+    attrs =
+      if sign? do
+        signature = message_authenticator(packet.secret, [header, attrs])
+        [<<t, l, _::binary>> | rest_attrs] = attrs
+        [<<t, l, signature::binary>> | rest_attrs]
+      else
+        attrs
+      end
+
+    {header, attrs}
+  end
+
+  defp message_authenticator(secret, msg) do
+    :crypto.mac(:hmac, :md5, secret, msg)
   end
 
   defp encode_attrs(%{attrs: a} = ctx) do
@@ -422,47 +500,38 @@ defmodule Radius.Packet do
   @doc """
   Return the value of a given attribute, if found, or default otherwise.
   """
-  def get_attr(packet, attr_name, default \\ nil) do
-    result =
-      packet.attrs
-      |> Enum.find(default, fn
-        {^attr_name, _} -> true
-        _ -> false
-      end)
-
-    case result do
-      {_, value} -> value
-      _ -> nil
-    end
+  def get_attr(packet, attr_name) do
+    for {^attr_name, value} <- packet.attrs, do: value
   end
 
   @doc """
   Verify if the packet signature is valid.
+
+  (https://www.ietf.org/rfc/rfc2869.txt)
   """
   def verify(packet) do
-    # TODO: this code is going to fail when validating replies
-    sig1 =
-      packet
-      |> Radius.Packet.get_attr("Message-Authenticator")
+    verify(packet, packet.auth)
+  end
 
-    if sig1 != nil do
-      attrs =
-        packet.attrs
-        |> Enum.filter(fn {k, _} -> k != "Message-Authenticator" end)
+  def verify(packet, request_authenticator) do
+    case Radius.Packet.get_attr(packet, "Message-Authenticator") do
+      [sig1] ->
+        attrs =
+          Enum.map(packet.attrs, fn
+            {"Message-Authenticator", _} -> {"Message-Authenticator", <<0::size(128)>>}
+            attr -> attr
+          end)
 
-      raw =
-        %{packet | attrs: attrs}
-        |> Radius.Packet.encode(raw: true, sign: true)
-        |> IO.iodata_to_binary()
+        packet = %{packet | attrs: attrs}
+        {header, attrs} = encode_packet(packet, [])
+        <<code, id, length::size(16), _resp_auth::binary>> = header
+        sign_header = <<code, id, length::size(16), request_authenticator::binary>>
 
-      crop_len = byte_size(raw) - 16
-      <<_::bytes-size(crop_len), sig2::binary>> = raw
+        sig2 = message_authenticator(packet.secret, [sign_header, attrs])
+        sig1 == sig2
 
-      sig1 == sig2
-    else
-      false
+      _ ->
+        false
     end
   end
 end
-
-# defmodule Packet

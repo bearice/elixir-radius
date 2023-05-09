@@ -32,7 +32,7 @@ defmodule Radius do
         packet:: %Radius.Packet{}
   """
   def send(sk, {host, port}, packet) do
-    data = Packet.encode(packet)
+    %{raw: data} = Packet.encode_reply(packet, packet.auth)
     :gen_udp.send(sk, host, port, data)
   end
 end
