@@ -288,12 +288,7 @@ defmodule Radius.Packet do
     packet = %{packet | auth: request_authenticator}
     {header, attrs} = encode_packet(packet, options)
 
-    resp_auth =
-      :crypto.hash_init(:md5)
-      |> :crypto.hash_update(header)
-      |> :crypto.hash_update(attrs)
-      |> :crypto.hash_update(packet.secret)
-      |> :crypto.hash_final()
+    resp_auth = :crypto.hash(:md5, [header, attrs, packet.secret])
 
     header = <<header::bytes-size(4), resp_auth::binary>>
 
@@ -507,6 +502,7 @@ defmodule Radius.Packet do
   @doc """
   Verify if the packet signature is valid.
 
+  (https://www.ietf.org/rfc/rfc2865.txt)
   (https://www.ietf.org/rfc/rfc2869.txt)
   """
   def verify(packet) do
@@ -516,6 +512,9 @@ defmodule Radius.Packet do
   def verify(packet, request_authenticator) do
     case Radius.Packet.get_attr(packet, "Message-Authenticator") do
       [sig1] ->
+        {header, attrs} = encode_packet(%{packet | auth: request_authenticator}, [])
+        resp_auth = :crypto.hash(:md5, [header, attrs, packet.secret])
+
         attrs =
           Enum.map(packet.attrs, fn
             {"Message-Authenticator", _} -> {"Message-Authenticator", <<0::size(128)>>}
@@ -526,12 +525,15 @@ defmodule Radius.Packet do
         {header, attrs} = encode_packet(packet, [])
         <<code, id, length::size(16), _resp_auth::binary>> = header
         sign_header = <<code, id, length::size(16), request_authenticator::binary>>
-
         sig2 = message_authenticator(packet.secret, [sign_header, attrs])
-        sig1 == sig2
+
+        (packet.auth == request_authenticator or packet.auth == resp_auth) and sig1 == sig2
 
       _ ->
-        false
+        {header, attrs} = encode_packet(%{packet | auth: request_authenticator}, [])
+        resp_auth = :crypto.hash(:md5, [header, attrs, packet.secret])
+
+        packet.auth == request_authenticator or packet.auth == resp_auth
     end
   end
 end

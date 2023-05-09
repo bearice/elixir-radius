@@ -115,10 +115,10 @@ defmodule Radius.PacketTest do
     assert reply == @sample_binary_rep_signed
   end
 
-  test "verify message authenticator signature on request" do
+  test "verify (message) authenticator signature on request" do
     assert Radius.Packet.verify(@sample_req)
+    assert Radius.Packet.verify(%{@sample_req | attrs: []})
     refute Radius.Packet.verify(%{@sample_req | id: 14})
-    refute Radius.Packet.verify(%{@sample_req | attrs: []})
   end
 
   test "verify message authenticator signature on reply" do
