@@ -1,6 +1,10 @@
 elixir-radius
 =============
 
+[![CI](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml/badge.svg)](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml)
+
+[![Hex.pm version](https://img.shields.io/hexpm/v/elixir_radius.svg?style=flat)](https://hex.pm/packages/elixir_radius)
+
 RADIUS protocol encoding and decoding
 
 example
