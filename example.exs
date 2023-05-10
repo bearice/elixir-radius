@@ -42,7 +42,7 @@ attrs = [
 p = %Radius.Packet{code: "Access-Request", id: 12, secret: secret, attrs: attrs}
 # will return an iolist
 %{raw: data} = Radius.Packet.encode_request(p)
-Logger.debug("data=#{inspect(packet.raw)}")
+Logger.debug("data=#{inspect(data)}")
 
 p = Radius.Packet.decode(:erlang.iolist_to_binary(data), secret)
 Logger.debug(inspect(p, pretty: true))
