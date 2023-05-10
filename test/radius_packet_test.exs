@@ -86,6 +86,28 @@ defmodule Radius.PacketTest do
     assert packet.auth == @sample_req.auth
   end
 
+  test "encode request - deprecated" do
+    # cut authenticator as it will be generated on each encoding
+    <<before::size(32), _random::size(128), rest::binary>> =
+      @sample_req
+      |> Map.put(:auth, nil)
+      |> Radius.Packet.encode()
+      |> IO.iodata_to_binary()
+
+    <<sample_before::size(32), _random::size(128), sample_rest::binary>> = @sample_binary_req
+    assert <<before::size(32), rest::binary>> == <<sample_before::size(32), sample_rest::binary>>
+  end
+
+  test "encode reply - deprecated" do
+    reply =
+      @sample_rep
+      |> Map.put(:auth, @sample_req.auth)
+      |> Radius.Packet.encode()
+      |> IO.iodata_to_binary()
+
+    assert reply == @sample_binary_rep
+  end
+
   test "encode request" do
     # cut authenticator as it will be generated on each encoding
     <<before::size(32), _random::size(128), rest::binary>> =

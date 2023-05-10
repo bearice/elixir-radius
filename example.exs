@@ -65,8 +65,8 @@ loop = fn loop ->
 
   IO.puts("From #{inspect(host)} : \n#{inspect(p, pretty: true)}")
 
-  resp = %Radius.Packet{code: "Access-Reject", id: p.id, auth: p.auth, secret: p.secret}
-  Radius.send(sk, host, resp)
+  resp = %Radius.Packet{code: "Access-Reject", id: p.id, secret: p.secret}
+  Radius.send_reply(sk, host, resp, p.auth)
 
   loop.(loop)
 end

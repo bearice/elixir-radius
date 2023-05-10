@@ -31,8 +31,35 @@ defmodule Radius do
         sk :: socket
         packet:: %Radius.Packet{}
   """
+  @deprecated "Use send_reply/4 or send_request/3"
   def send(sk, {host, port}, packet) do
-    %{raw: data} = Packet.encode_reply(packet, packet.auth)
+    send_reply(sk, {host, port}, packet, packet.auth)
+  end
+
+  @doc """
+  encode and send reply packet
+  """
+  @spec send_reply(
+          socket :: port(),
+          {host :: :inet.ip_address(), port :: :inet.port_number()},
+          packet :: Packet.t(),
+          request_authenticator :: binary()
+        ) :: :ok | {:error, any()}
+  def send_reply(sk, {host, port}, packet, request_authenticator) do
+    %{raw: data} = Packet.encode_reply(packet, request_authenticator)
+    :gen_udp.send(sk, host, port, data)
+  end
+
+  @doc """
+  encode and send request packet
+  """
+  @spec send_request(
+          socket :: port(),
+          {host :: :inet.ip_address(), port :: :inet.port_number()},
+          packet :: Packet.t()
+        ) :: :ok | {:error, any()}
+  def send_request(sk, {host, port}, packet) do
+    %{raw: data} = Packet.encode_request(packet)
     :gen_udp.send(sk, host, port, data)
   end
 end
