@@ -208,59 +208,14 @@ defmodule Radius.Packet do
   """
   @deprecated "Use encode_request/1-2 or encode_reply/1-2 instead"
   def encode(packet, options \\ []) do
-    sign? = options |> Keyword.get(:sign, false)
-    raw? = options |> Keyword.get(:raw, false)
-
-    {auth, reply?} =
-      if packet.auth == nil do
-        {:crypto.strong_rand_bytes(16), false}
-      else
-        {packet.auth, true}
-      end
-
-    packet = %{packet | auth: auth}
-
     packet =
-      if sign? do
-        attrs = packet.attrs ++ [{"Message-Authenticator", <<0::size(128)>>}]
-
-        %{packet | attrs: attrs}
+      if packet.auth == nil do
+        encode_request(packet, options)
       else
-        packet
+        encode_reply(packet, packet.auth, options)
       end
 
-    attrs = encode_attrs(packet)
-
-    code = encode_code(packet.code)
-    length = 20 + :erlang.iolist_size(attrs)
-    header = <<code, packet.id, length::size(16), auth::binary>>
-
-    attrs =
-      if sign? do
-        signature = :crypto.mac(:hmac, :md5, packet.secret, [header, attrs])
-        [last | attrs] = attrs |> Enum.reverse()
-        crop_len = byte_size(last) - 16
-        last = <<last::bytes-size(crop_len), signature::binary>>
-        [last | attrs] |> Enum.reverse()
-      else
-        attrs
-      end
-
-    header =
-      if reply? and raw? == false do
-        resp_auth =
-          :crypto.hash_init(:md5)
-          |> :crypto.hash_update(header)
-          |> :crypto.hash_update(attrs)
-          |> :crypto.hash_update(packet.secret)
-          |> :crypto.hash_final()
-
-        <<header::bytes-size(4), resp_auth::binary>>
-      else
-        header
-      end
-
-    [header, attrs]
+    packet.raw
   end
 
   @doc """
