@@ -2,10 +2,10 @@ defmodule Radius.Packet do
   require Logger
 
   alias __MODULE__
-  alias Radius.Dict.Attribute
-  alias Radius.Dict.Vendor
-  alias Radius.Dict.Value
+  alias Radius.Dict
   alias Radius.Dict.EntryNotFoundError
+
+  @default_format {1, 1}
 
   @type t :: %{
           code: String.t(),
@@ -68,9 +68,11 @@ defmodule Radius.Packet do
   defp decode_code(x), do: x
 
   defp decode_payload(ctx) do
-    decode_tlv(ctx.rest, [], {1, 1})
+    decode_tlv(ctx.rest)
     |> resolve_tlv(ctx)
   end
+
+  defp decode_tlv(bin, acc \\ [], format \\ @default_format)
 
   defp decode_tlv(<<>>, acc, _), do: acc |> Enum.reverse()
   # not to decode USR style VSAs
@@ -96,7 +98,7 @@ defmodule Radius.Packet do
     <<vid::size(32), rest::binary>> = value
 
     try do
-      v = Vendor.by_id(vid)
+      v = Dict.vendor_by_id(vid)
 
       value =
         case decode_tlv(rest, [], v.format) do
@@ -105,7 +107,7 @@ defmodule Radius.Packet do
 
           tlv when is_list(tlv) ->
             Enum.map(tlv, fn x ->
-              resolve_tlv(x, ctx, v.id)
+              resolve_tlv(x, ctx, v)
             end)
         end
 
@@ -118,8 +120,7 @@ defmodule Radius.Packet do
 
   defp resolve_tlv({type, value} = tlv, ctx, vendor) do
     try do
-      attr = Attribute.by_id(vendor, type)
-      type = attr.name
+      attr = vendor_attribute_by_id(vendor, type)
       has_tag = Keyword.has_key?(attr.opts, :has_tag)
 
       {tag, value} =
@@ -141,9 +142,9 @@ defmodule Radius.Packet do
         |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
 
       if tag do
-        {type, {tag, value}}
+        {attr.name, {tag, value}}
       else
-        {type, value}
+        {attr.name, value}
       end
     rescue
       _e in EntryNotFoundError ->
@@ -167,10 +168,15 @@ defmodule Radius.Packet do
     bin
   end
 
-  defp resolve_value(val, vid, aid) do
+  defp resolve_value(val, vendor, aid) do
     try do
-      v = Value.by_value(vid, aid, val)
-      v.name
+      if vendor do
+        v = vendor.mod().value_by_value(aid, val)
+        v.name
+      else
+        v = Dict.value_by_value(aid, val)
+        v.name
+      end
     rescue
       _e in EntryNotFoundError ->
         val
@@ -290,10 +296,11 @@ defmodule Radius.Packet do
     end)
   end
 
+  defp encode_attr(attr, format \\ @default_format)
   # back-door for VSAs, encode_vsa could retuen an iolist
-  defp encode_attr({26, value}), do: [26, :erlang.iolist_size(value) + 2, value]
+  defp encode_attr({26, value}, _), do: [26, :erlang.iolist_size(value) + 2, value]
 
-  defp encode_attr({tag, value}) when is_binary(value) do
+  defp encode_attr({tag, value}, _) when is_binary(value) do
     len = byte_size(value) + 2
 
     if len > 0xFF do
@@ -303,7 +310,7 @@ defmodule Radius.Packet do
     <<tag, len, value::binary>>
   end
 
-  defp encode_attr({tag, value}) when is_integer(value) do
+  defp encode_attr({tag, value}, _) when is_integer(value) do
     if value > 0xFFFFFFFF do
       Logger.warn("value truncated: #{inspect({tag, value})}")
     end
@@ -311,9 +318,7 @@ defmodule Radius.Packet do
     <<tag, 6, value::integer-size(32)>>
   end
 
-  defp encode_attr({type, value, attr}) do
-    {t, l} = attr.vendor.format
-
+  defp encode_attr({type, value, attr}, {t, l}) do
     value =
       if Keyword.has_key?(attr.opts, :has_tag) do
         {tag, value} =
@@ -375,19 +380,19 @@ defmodule Radius.Packet do
   end
 
   defp resolve_attr(tlv, ctx) do
-    resolve_attr(tlv, ctx, %Vendor{})
+    resolve_attr(tlv, ctx, nil)
   end
 
   defp resolve_attr({type, value}, ctx, vendor) do
     case lookup_attr(vendor, type) do
       nil -> {type, value}
-      a -> {a.id, lookup_value(a, value) |> encrypt_value(a, ctx), a}
+      a -> {a.id, lookup_value(a, value, vendor) |> encrypt_value(a, ctx), a}
     end
   end
 
   defp lookup_attr(vendor, type) when is_integer(type) do
     try do
-      Attribute.by_id(vendor.id, type)
+      vendor_attribute_by_id(vendor, type)
     rescue
       _e in EntryNotFoundError -> nil
     end
@@ -395,17 +400,22 @@ defmodule Radius.Packet do
 
   # Raise an error if attr not defined
   defp lookup_attr(_vendor, type) when is_binary(type) do
-    Attribute.by_name(type)
+    Dict.attribute_by_name(type)
   end
 
-  defp lookup_value(attr, {tag, val}) do
-    {tag, lookup_value(attr, val)}
+  defp lookup_value(attr, {tag, val}, vendor) do
+    {tag, lookup_value(attr, val, vendor)}
   end
 
-  defp lookup_value(%{type: :integer} = attr, val) when is_binary(val) do
+  defp lookup_value(%{type: :integer} = attr, val, vendor) when is_binary(val) do
     try do
-      v = Value.by_name(attr.vendor.name, attr.name, val)
-      v.value
+      if vendor do
+        v = vendor.mod().value_by_name(attr.name, val)
+        v.value
+      else
+        v = Dict.value_by_name(attr.name, val)
+        v.value
+      end
     rescue
       _e in EntryNotFoundError ->
         # raise "Value can not be resolved: #{attr.name}: #{val}"
@@ -413,10 +423,10 @@ defmodule Radius.Packet do
     end
   end
 
-  defp lookup_value(_, val), do: val
+  defp lookup_value(_, val, _), do: val
 
   defp encode_vsa(vid, value, ctx) when is_binary(value) and is_binary(vid),
-    do: encode_vsa(Vendor.by_name(vid).id, value, ctx)
+    do: encode_vsa(Dict.vendor_by_name(vid).id, value, ctx)
 
   defp encode_vsa(vid, value, _) when is_binary(value) and is_integer(vid),
     do: <<vid::size(32), value::binary>>
@@ -424,14 +434,15 @@ defmodule Radius.Packet do
   defp encode_vsa(vid, vsa, ctx) when is_tuple(vsa), do: encode_vsa(vid, [vsa], ctx)
 
   defp encode_vsa(vid, vsa, ctx) when is_binary(vid),
-    do: encode_vsa(Vendor.by_name(vid), vsa, ctx)
+    do: encode_vsa(Dict.vendor_by_name(vid), vsa, ctx)
 
-  defp encode_vsa(vid, vsa, ctx) when is_integer(vid), do: encode_vsa(Vendor.by_id(vid), vsa, ctx)
+  defp encode_vsa(vid, vsa, ctx) when is_integer(vid),
+    do: encode_vsa(Dict.vendor_by_id(vid), vsa, ctx)
 
   defp encode_vsa(vendor, vsa, ctx) do
     val =
       Enum.map(vsa, fn x ->
-        x |> resolve_attr(ctx, vendor) |> encode_attr
+        x |> resolve_attr(ctx, vendor) |> encode_attr(vendor.format)
       end)
 
     [<<vendor.id::size(32)>> | val]
@@ -446,6 +457,16 @@ defmodule Radius.Packet do
   defp encode_code("Accounting-Response"), do: 5
   defp encode_code("Status-Server"), do: 12
   defp encode_code("Status-Client"), do: 13
+
+  defp vendor_attribute_by_id(nil, id) do
+    Dict.attribute_by_id(id)
+  end
+
+  defp vendor_attribute_by_id(vendor, id) do
+    with %{module: mod} <- Dict.vendor_by_id(vendor.id) do
+      mod.attribute_by_id(id)
+    end
+  end
 
   @doc """
   Return the value of a given attribute, if found, or default otherwise.
