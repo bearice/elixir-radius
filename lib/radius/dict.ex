@@ -9,9 +9,6 @@ defmodule Radius.Dict do
     end
   end
 
-  config_includes =
-    Application.compile_env(:elixir_radius, :included_dictionaries, ["rfc2865", "rfc2869"])
-
   extra_dictionaries = Application.compile_env(:elixir_radius, :extra_dictionaries, [])
 
   {includes, generic_attributes, generic_values} =
@@ -19,10 +16,15 @@ defmodule Radius.Dict do
     |> File.read!()
     |> Parser.parse_index()
 
+  filtered_includes =
+    if config_includes = Application.compile_env(:elixir_radius, :included_dictionaries) do
+      Enum.filter(includes, &(&1 in config_includes))
+    else
+      includes
+    end
+
   dict_files =
-    includes
-    |> Enum.filter(&(&1 in config_includes))
-    |> Enum.map(fn dict -> Path.join(["dicts", "dictionary.#{dict}"]) end)
+    Enum.map(filtered_includes, fn dict -> Path.join(["dicts", "dictionary.#{dict}"]) end)
 
   {vendors, attributes, values} =
     Enum.reduce(
