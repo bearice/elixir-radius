@@ -12,6 +12,8 @@ defmodule Radius.Dict do
   config_includes =
     Application.compile_env(:elixir_radius, :included_dictionaries, ["rfc2865", "rfc2869"])
 
+  extra_dictionaries = Application.compile_env(:elixir_radius, :extra_dictionaries, [])
+
   {includes, generic_attributes, generic_values} =
     Path.join(["dicts", "dictionary"])
     |> File.read!()
@@ -23,36 +25,37 @@ defmodule Radius.Dict do
     |> Enum.map(fn dict -> Path.join(["dicts", "dictionary.#{dict}"]) end)
 
   {vendors, attributes, values} =
-    Enum.reduce(dict_files, {[], generic_attributes, generic_values}, fn dict_file,
-                                                                         {acc_vendors,
-                                                                          acc_attributes,
-                                                                          acc_values} ->
-      dict =
-        dict_file
-        |> File.read!()
-        |> Parser.parse()
+    Enum.reduce(
+      dict_files ++ extra_dictionaries,
+      {[], generic_attributes, generic_values},
+      fn dict_file, {acc_vendors, acc_attributes, acc_values} ->
+        dict =
+          dict_file
+          |> File.read!()
+          |> Parser.parse()
 
-      {acc_attributes, rest} =
-        case Map.pop(dict, :attributes) do
-          {[], rest} -> {acc_attributes, rest}
-          {attributes, rest} -> {attributes ++ acc_attributes, rest}
-        end
+        {acc_attributes, rest} =
+          case Map.pop(dict, :attributes) do
+            {[], rest} -> {acc_attributes, rest}
+            {attributes, rest} -> {attributes ++ acc_attributes, rest}
+          end
 
-      {acc_values, rest} =
-        case Map.pop(rest, :values) do
-          {[], rest} -> {acc_values, rest}
-          {values, rest} -> {values ++ acc_values, rest}
-        end
+        {acc_values, rest} =
+          case Map.pop(rest, :values) do
+            {[], rest} -> {acc_values, rest}
+            {values, rest} -> {values ++ acc_values, rest}
+          end
 
-      acc_vendors =
-        if vendor = Map.get(rest, :vendor) do
-          [vendor | acc_vendors]
-        else
-          acc_vendors
-        end
+        acc_vendors =
+          if vendor = Map.get(rest, :vendor) do
+            [vendor | acc_vendors]
+          else
+            acc_vendors
+          end
 
-      {acc_vendors, acc_attributes, acc_values}
-    end)
+        {acc_vendors, acc_attributes, acc_values}
+      end
+    )
 
   for attribute <- attributes do
     attr_fun_name = "attr_#{attribute.name}" |> String.replace("-", "_") |> String.to_atom()
