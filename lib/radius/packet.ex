@@ -138,7 +138,7 @@ defmodule Radius.Packet do
       value =
         value
         |> decode_value(attr.type)
-        |> resolve_value(vendor, attr.id)
+        |> resolve_value(vendor, attr.name)
         |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
 
       if tag do
@@ -168,13 +168,13 @@ defmodule Radius.Packet do
     bin
   end
 
-  defp resolve_value(val, vendor, aid) do
+  defp resolve_value(val, vendor, attr_name) do
     try do
       if vendor do
-        v = vendor.mod().value_by_value(aid, val)
+        v = vendor.module().value_by_value(attr_name, val)
         v.name
       else
-        v = Dict.value_by_value(aid, val)
+        v = Dict.value_by_value(attr_name, val)
         v.name
       end
     rescue
@@ -399,8 +399,8 @@ defmodule Radius.Packet do
   end
 
   # Raise an error if attr not defined
-  defp lookup_attr(_vendor, type) when is_binary(type) do
-    Dict.attribute_by_name(type)
+  defp lookup_attr(vendor, type) when is_binary(type) do
+    vendor_attribute_by_name(vendor, type)
   end
 
   defp lookup_value(attr, {tag, val}, vendor) do
@@ -410,7 +410,7 @@ defmodule Radius.Packet do
   defp lookup_value(%{type: :integer} = attr, val, vendor) when is_binary(val) do
     try do
       if vendor do
-        v = vendor.mod().value_by_name(attr.name, val)
+        v = vendor.module().value_by_name(attr.name, val)
         v.value
       else
         v = Dict.value_by_name(attr.name, val)
@@ -440,6 +440,8 @@ defmodule Radius.Packet do
     do: encode_vsa(Dict.vendor_by_id(vid), vsa, ctx)
 
   defp encode_vsa(vendor, vsa, ctx) do
+    IO.inspect(vendor)
+
     val =
       Enum.map(vsa, fn x ->
         x |> resolve_attr(ctx, vendor) |> encode_attr(vendor.format)
@@ -465,6 +467,16 @@ defmodule Radius.Packet do
   defp vendor_attribute_by_id(vendor, id) do
     with %{module: mod} <- Dict.vendor_by_id(vendor.id) do
       mod.attribute_by_id(id)
+    end
+  end
+
+  defp vendor_attribute_by_name(nil, name) do
+    Dict.attribute_by_name(name)
+  end
+
+  defp vendor_attribute_by_name(vendor, name) do
+    with %{module: mod} <- Dict.vendor_by_id(vendor.id) do
+      mod.attribute_by_name(name)
     end
   end
 

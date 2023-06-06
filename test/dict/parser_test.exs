@@ -68,7 +68,7 @@ defmodule Radius.Dict.ParserTest do
 
       assert %{
                attributes: [
-                 %{id: 67, name: "Tunnel-Server-Endpoint", opts: [tag: true], type: :string}
+                 %{id: 67, name: "Tunnel-Server-Endpoint", opts: [has_tag: true], type: :string}
                ]
              } = parse(attribute)
     end
@@ -82,7 +82,7 @@ defmodule Radius.Dict.ParserTest do
                parse(attribute)
 
       assert 2 = Keyword.get(parsed_opts, :encrypt)
-      assert Keyword.get(parsed_opts, :tag)
+      assert Keyword.get(parsed_opts, :has_tag)
     end
   end
 end

@@ -100,7 +100,7 @@ defmodule Radius.Dict.Parser do
     |> concat(attribute_type)
     |> optional(
       ignore(separator)
-      |> optional(string("has_tag") |> replace(true) |> unwrap_and_tag(:tag))
+      |> optional(string("has_tag") |> replace(true) |> unwrap_and_tag(:has_tag))
       |> optional(ignore(string(",")))
       |> optional(ignore(string("encrypt=")) |> integer(1) |> unwrap_and_tag(:encrypt))
       |> tag(:opts)

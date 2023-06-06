@@ -24,7 +24,7 @@ attrs = [
   {attr_NAS_IP_Address(), {1, 2, 3, 4}},
   {attr_NAS_IP_Address(), 0x12345678},
   # ipv6addr
-  {attr_Login_IPV6_Host(), {2003, 0xEFFF, 0, 0, 0, 0, 0, 4}},
+  {attr_Login_IPv6_Host(), {2003, 0xEFFF, 0, 0, 0, 0, 0, 4}},
   # VSA
   {{attr_Vendor_Specific(), 9},
    [

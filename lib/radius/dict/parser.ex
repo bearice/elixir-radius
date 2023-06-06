@@ -1,6 +1,6 @@
 # Default for opts on `parse_bin/2` manually removed to get rid of warning
 # Generated from lib/radius/dict/parser.ex.exs, do not edit.
-# Generated at 2023-06-05 20:47:09Z.
+# Generated at 2023-06-06 13:43:01Z.
 
 defmodule Radius.Dict.Parser do
   def parse(binary) do
@@ -1687,7 +1687,7 @@ defmodule Radius.Dict.Parser do
   end
 
   defp parse_bin__219(<<"has_tag", rest::binary>>, acc, stack, context, comb__line, comb__offset) do
-    parse_bin__220(rest, [tag: true] ++ acc, stack, context, comb__line, comb__offset + 7)
+    parse_bin__220(rest, [has_tag: true] ++ acc, stack, context, comb__line, comb__offset + 7)
   end
 
   defp parse_bin__219(<<rest::binary>>, acc, stack, context, comb__line, comb__offset) do
@@ -3573,7 +3573,7 @@ defmodule Radius.Dict.Parser do
   end
 
   defp parse_bin__434(<<"has_tag", rest::binary>>, acc, stack, context, comb__line, comb__offset) do
-    parse_bin__435(rest, [tag: true] ++ acc, stack, context, comb__line, comb__offset + 7)
+    parse_bin__435(rest, [has_tag: true] ++ acc, stack, context, comb__line, comb__offset + 7)
   end
 
   defp parse_bin__434(<<rest::binary>>, acc, stack, context, comb__line, comb__offset) do

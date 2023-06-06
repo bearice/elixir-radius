@@ -77,7 +77,7 @@ defmodule Radius.Dict do
   end
 
   for vendor <- vendors do
-    mod = Module.concat(__MODULE__, :"Vendor#{vendor.name}")
+    mod = Module.concat(__MODULE__, :"Vendor#{String.replace(vendor.name, "-", "_")}")
     [tl, ll] = Keyword.get(vendor.opts, :format) || [1, 1]
     vendor_data = %{id: vendor.id, name: vendor.name, format: {tl, ll}, module: mod}
     def vendor_by_id(unquote(vendor.id)), do: unquote(Macro.escape(vendor_data))
