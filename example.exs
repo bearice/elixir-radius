@@ -1,39 +1,38 @@
 require Logger
-# RadiusApp.start :normal,[]
+use Radius.Dict
 
-# IO.puts inspect RadiusDict.Vendor.by_name("Cisco")
-# IO.puts inspect RadiusDict.Attribute.by_name("Service-Type")
-# IO.puts inspect RadiusDict.Value.by_name("Service-Type","Login-User")
-# IO.puts inspect RadiusDict.Value.by_value(6,11)
-# IO.puts inspect RadiusDict.Value.by_name("Cisco","Cisco-Disconnect-Cause","Unknown")
-# IO.puts inspect RadiusDict.Value.by_value(9,195,11)
-# IO.puts inspect RadiusDict.Value.by_value(9,1950,11)
+# IO.puts inspect Radius.Dict.vendor_by_name("Cisco")
+# IO.puts inspect Radius.Dict.attribute_by_name("Service-Type")
+# IO.puts inspect Radius.Dict.value_by_name("Service-Type","Login-User")
+# IO.puts inspect Radius.Dict.value_by_value("Service-Type",11)
+# IO.puts inspect Radius.Dict.VendorCisco.value_by_name("Cisco-Disconnect-Cause","Unknown")
+# IO.puts inspect Radius.Dict.VendorCisco.value_by_value("Cisco-Disconnect-Cause",11)
 
 secret = "112233"
 
 attrs = [
-  {"User-Password", "1234"},
+  attr_User_Password("1234"),
   # tagged attribute (rfc2868)
-  {"Tunnel-Type", "PPTP"},
+  attr_Tunnel_Type(val_Tunnel_Type_PPTP()),
   # equals
-  {"Tunnel-Type", {0, "PPTP"}},
-  {"Tunnel-Type", {10, "PPTP"}},
-  {"Service-Type", "Login-User"},
+  {attr_Tunnel_Type(), {0, "PPTP"}},
+  attr_Tunnel_Type({10, "PPTP"}),
+  {attr_Service_Type(), "Login-User"},
   # tag & value can be integer
   {6, 1},
   # ipaddr
-  {"NAS-IP-Address", {1, 2, 3, 4}},
-  {"NAS-IP-Address", 0x12345678},
+  {attr_NAS_IP_Address(), {1, 2, 3, 4}},
+  {attr_NAS_IP_Address(), 0x12345678},
   # ipv6addr
-  {"Login-IPv6-Host", {2003, 0xEFFF, 0, 0, 0, 0, 0, 4}},
+  {attr_Login_IPv6_Host(), {2003, 0xEFFF, 0, 0, 0, 0, 0, 4}},
   # VSA
-  {{"Vendor-Specific", 9},
+  {{attr_Vendor_Specific(), 9},
    [
      {"Cisco-Disconnect-Cause", 10},
      {195, "Unknown"}
    ]},
   # empty VSA?
-  {{"Vendor-Specific", "Microsoft"}, []},
+  {{attr_Vendor_Specific(), "Microsoft"}, []},
   # some unknown attribute
   {255, "123456"}
 ]

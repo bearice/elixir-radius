@@ -17,9 +17,7 @@ defmodule RadiusProxy.Mixfile do
   # Type `mix help compile.app` for more information
   def application() do
     [
-      applications: [:logger, :crypto],
-      registered: [Radius.Dict],
-      mod: {Radius.Application, []}
+      extra_applications: [:logger, :crypto]
     ]
   end
 
@@ -35,8 +33,8 @@ defmodule RadiusProxy.Mixfile do
   defp deps() do
     [
       {:earmark, "~> 1.4", only: :dev},
-      {:ex_doc, "~> 0.19", only: :dev}
-      #  {:socket,"~> 0.2.8"}
+      {:ex_doc, "~> 0.19", only: :dev},
+      {:nimble_parsec, "~> 1.3", only: :dev}
     ]
   end
 
@@ -48,7 +46,7 @@ defmodule RadiusProxy.Mixfile do
 
   defp package() do
     [
-      files: ["lib", "src", "mix.exs", "example.exs", "README.md", "LICENSE", "priv"],
+      files: ["lib", "mix.exs", "example.exs", "README.md", "LICENSE", "dicts"],
       contributors: ["Bearice Ren", "Guilherme Balena Versiani", "Timmo Verlaan"],
       licenses: ["MIT License"],
       links: %{"Github" => "https://github.com/bearice/elixir-radius"}

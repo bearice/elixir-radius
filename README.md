@@ -1,13 +1,11 @@
 elixir-radius
 =============
 
-[![CI](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml/badge.svg)](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml)
-
-[![Hex.pm version](https://img.shields.io/hexpm/v/elixir_radius.svg?style=flat)](https://hex.pm/packages/elixir_radius)
+[![CI](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml/badge.svg)](https://github.com/bearice/elixir-radius/actions/workflows/elixir.yml) [![Hex.pm version](https://img.shields.io/hexpm/v/elixir_radius.svg?style=flat)](https://hex.pm/packages/elixir_radius)
 
 RADIUS protocol encoding and decoding
 
-example
+Example
 -------
 ```Elixir
 #wrapper of gen_udp
@@ -27,3 +25,27 @@ loop = fn(loop)->
 end
 loop.(loop)
 ```
+
+Dictionary configuration
+--------------------
+
+Vendor specific dictionaries are compiled into a specific vendor module. Generic attributes and values
+are compiled into `Radius.Dict`. If you add the "cisco" dictionary you will get the module `Radius.Dict.VendorCisco`.
+
+```Elixir
+config :elixir_radius,
+  included_dictionaries: ["rfc2865", "rfc2868", "rfc2869", "cisco"]
+```
+
+You can also add your own dictionaries by providing the paths to `:elixir_radius` in `:extra_dictionaries`
+
+```Elixir
+config :elixir_radius,
+  extra_dictionaries: ["path_to_your_dictionary"]
+```
+
+Macros
+------
+
+`Radius.Dict` exposes a set of macro's so you can construct AVPs and let the compiler confirm the
+attributes and save time during runtime.

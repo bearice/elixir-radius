@@ -1,7 +1,31 @@
 defmodule Radius.PacketTest do
   use ExUnit.Case, async: true
+  use Radius.Dict
 
   @secret "mykey"
+  @sample_macro_req %Radius.Packet{
+    code: "Access-Request",
+    id: 118,
+    length: 173,
+    auth: <<55, 91, 232, 245, 150, 233, 11, 207, 252, 94, 50, 146, 157, 20, 39, 91>>,
+    attrs: [
+      {attr_NAS_IP_Address(), {10, 62, 1, 238}},
+      {attr_NAS_Port(), 50001},
+      {attr_NAS_Port_Type(), val_NAS_Port_Type_Ethernet()},
+      {attr_User_Name(), "host/drswin7tracyp.drsl.co.uk"},
+      {attr_Called_Station_Id(), "00-12-00-E3-41-C1"},
+      {attr_Calling_Station_Id(), "B4-99-BA-F2-8A-D6"},
+      {attr_Service_Type(), val_Service_Type_Framed_User()},
+      {attr_Framed_MTU(), 1500},
+      {attr_EAP_Message(),
+       <<2, 0, 0, 34, 1, 104, 111, 115, 116, 47, 100, 114, 115, 119, 105, 110, 55, 116, 114, 97,
+         99, 121, 112, 46, 100, 114, 115, 108, 46, 99, 111, 46, 117, 107>>},
+      {attr_Message_Authenticator(),
+       <<201, 62, 246, 40, 105, 10, 87, 139, 49, 112, 155, 11, 188, 202, 222, 65>>}
+    ],
+    raw: nil,
+    secret: "mykey"
+  }
   @sample_req %Radius.Packet{
     code: "Access-Request",
     id: 118,
@@ -112,6 +136,18 @@ defmodule Radius.PacketTest do
     # cut authenticator as it will be generated on each encoding
     <<before::size(32), _random::size(128), rest::binary>> =
       @sample_req |> Radius.Packet.encode_request() |> Map.get(:raw) |> IO.iodata_to_binary()
+
+    <<sample_before::size(32), _random::size(128), sample_rest::binary>> = @sample_binary_req
+    assert <<before::size(32), rest::binary>> == <<sample_before::size(32), sample_rest::binary>>
+  end
+
+  test "encode macro request" do
+    # cut authenticator as it will be generated on each encoding
+    <<before::size(32), _random::size(128), rest::binary>> =
+      @sample_macro_req
+      |> Radius.Packet.encode_request()
+      |> Map.get(:raw)
+      |> IO.iodata_to_binary()
 
     <<sample_before::size(32), _random::size(128), sample_rest::binary>> = @sample_binary_req
     assert <<before::size(32), rest::binary>> == <<sample_before::size(32), sample_rest::binary>>
