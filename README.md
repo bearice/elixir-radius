@@ -29,6 +29,7 @@ loop.(loop)
 Dictionary configuration
 --------------------
 
+
 Vendor specific dictionaries are compiled into a specific vendor module. Generic attributes and values
 are compiled into `Radius.Dict`. If you add the "cisco" dictionary you will get the module `Radius.Dict.VendorCisco`.
 
@@ -36,6 +37,8 @@ are compiled into `Radius.Dict`. If you add the "cisco" dictionary you will get 
 config :elixir_radius,
   included_dictionaries: ["rfc2865", "rfc2868", "rfc2869", "cisco"]
 ```
+
+NOTE: By default, this library will compile all known vendors, which is quite slow, but had maxium compatibility with old versions. If you dont need them, please use above config to select what to be compiled.
 
 You can also add your own dictionaries by providing the paths to `:elixir_radius` in `:extra_dictionaries`
 
