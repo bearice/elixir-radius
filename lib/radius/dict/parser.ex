@@ -1,8 +1,9 @@
 # Default for opts on `parse_bin/2` manually removed to get rid of warning
 # Generated from lib/radius/dict/parser.ex.exs, do not edit.
-# Generated at 2023-06-06 13:43:01Z.
+# Generated at 2023-06-12 12:12:16Z.
 
 defmodule Radius.Dict.Parser do
+  @moduledoc false
   def parse(binary) do
     {:ok, _, "", ctx, _, _} =
       parse_bin(binary, context: [attributes: [], values: [], prepend_key: []])

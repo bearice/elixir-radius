@@ -1,6 +1,14 @@
 defmodule Radius.Dict do
-  alias Radius.Dict.Parser
+  @moduledoc """
+  Parses dictionaries and generates lookup functions and helper macro's.
+
+  The helper macro's give the benefit of compile time checks and faster encoding without losing
+  readability.
+  """
+  require Radius.Dict.Helpers
   alias Radius.Dict.EntryNotFoundError
+  alias Radius.Dict.Helpers
+  alias Radius.Dict.Parser
 
   defmacro __using__(_) do
     quote do
@@ -59,25 +67,32 @@ defmodule Radius.Dict do
       end
     )
 
-  for attribute <- attributes do
-    attr_fun_name = "attr_#{attribute.name}" |> String.replace("-", "_") |> String.to_atom()
+  Helpers.define_attribute_doc_helpers()
 
-    defmacro unquote(attr_fun_name)(), do: unquote(attribute.id)
-    defmacro unquote(attr_fun_name)(val), do: {unquote(attribute.id), val}
-    def attribute_by_id(unquote(attribute.id)), do: unquote(Macro.escape(attribute))
-    def attribute_by_name(unquote(attribute.name)), do: unquote(Macro.escape(attribute))
+  for attribute <- attributes do
+    Helpers.define_attribute_functions(attribute)
   end
+
+  Helpers.define_value_doc_helpers()
 
   for val <- values do
-    val_fun_name = "val_#{val.attr}_#{val.name}" |> String.replace("-", "_") |> String.to_atom()
-
-    defmacro unquote(val_fun_name)(), do: unquote(val.value)
-    def value_by_value(unquote(val.attr), unquote(val.value)), do: unquote(Macro.escape(val))
-    def value_by_name(unquote(val.attr), unquote(val.name)), do: unquote(Macro.escape(val))
+    Helpers.define_value_functions(val)
   end
 
+  @doc """
+  Get vendor struct based on vendor id
+  """
+  @doc group: :lookup
+  def vendor_by_id(attr_id)
+
+  @doc """
+  Get vendor struct based on vendor name
+  """
+  @doc group: :lookup
+  def vendor_by_name(attr_name)
+
   for vendor <- vendors do
-    mod = Module.concat(__MODULE__, :"Vendor#{String.replace(vendor.name, "-", "_")}")
+    mod = Module.concat(__MODULE__, Helpers.safe_name("Vendor#{vendor.name}"))
     [tl, ll] = Keyword.get(vendor.opts, :format) || [1, 1]
     vendor_data = %{id: vendor.id, name: vendor.name, format: {tl, ll}, module: mod}
     def vendor_by_id(unquote(vendor.id)), do: unquote(Macro.escape(vendor_data))
@@ -85,13 +100,8 @@ defmodule Radius.Dict do
 
     attribute_funs =
       for attribute <- vendor.attributes do
-        attr_fun_name = "attr_#{attribute.name}" |> String.replace("-", "_") |> String.to_atom()
-
-        quote location: :keep do
-          defmacro unquote(attr_fun_name)(), do: unquote(attribute.id)
-          defmacro unquote(attr_fun_name)(val), do: {unquote(attribute.id), val}
-          def attribute_by_id(unquote(attribute.id)), do: unquote(Macro.escape(attribute))
-          def attribute_by_name(unquote(attribute.name)), do: unquote(Macro.escape(attribute))
+        quote do
+          unquote(Helpers.generate_attribute_functions(Macro.escape(attribute)))
         end
       end
 
@@ -100,22 +110,13 @@ defmodule Radius.Dict do
     value_funs =
       if Enum.count(vendor.attributes ++ vendor.values) < elixir_compiler_limit do
         for val <- vendor.values do
-          val_fun_name =
-            "val_#{val.attr}_#{val.name}" |> String.replace("-", "_") |> String.to_atom()
-
-          quote location: :keep do
-            defmacro unquote(val_fun_name)(), do: unquote(val.value)
-
-            def value_by_value(unquote(val.attr), unquote(val.value)),
-              do: unquote(Macro.escape(val))
-
-            def value_by_name(unquote(val.attr), unquote(val.name)),
-              do: unquote(Macro.escape(val))
+          quote do
+            unquote(Helpers.generate_value_functions(Macro.escape(val)))
           end
         end
       else
         for {attr, vals} <- Enum.group_by(vendor.values, & &1.attr) do
-          val_fun_name = "val_#{attr}" |> String.replace("-", "_") |> String.to_atom()
+          val_fun_name = Helpers.safe_name("val_#{attr}")
 
           quote location: :keep do
             defmacro unquote(val_fun_name)(val_name),
@@ -143,7 +144,14 @@ defmodule Radius.Dict do
       end
 
     IO.puts("Compiling #{mod}")
-    Module.create(mod, attribute_funs ++ value_funs, Macro.Env.location(__ENV__))
+
+    value_doc_funs = if value_funs == [], do: [], else: [Helpers.generate_value_doc_helpers()]
+
+    module_body =
+      [Helpers.generate_attribute_doc_helpers()] ++
+        attribute_funs ++ value_funs ++ value_doc_funs
+
+    Module.create(mod, module_body, Macro.Env.location(__ENV__))
   end
 
   def attribute_by_id(id), do: raise(EntryNotFoundError, type: :attribute, key: id)
