@@ -1,7 +1,11 @@
 defmodule Radius.Packet do
+  @moduledoc """
+  This module defines a struct and provides the main functions to encode and decode requests and replies.
+  """
   require Logger
 
   alias __MODULE__
+  require Radius.Dict
   alias Radius.Dict
   alias Radius.Dict.EntryNotFoundError
 
@@ -26,10 +30,17 @@ defmodule Radius.Packet do
 
   @doc """
   Decode radius packet
+
+  Options:
+
+    * `attributes` - leave attributes as `:integers`, defaults to `:strings`. `:integers` can be
+      pattern matched with the macro's provided by `Radius.Dict`
   """
-  def decode(data, secret) do
+  def decode(data, secret, opts \\ []) do
+    attributes_as = Keyword.get(opts, :attributes, :strings)
+
     pkt =
-      %{raw: data, secret: secret, attrs: nil}
+      %{raw: data, secret: secret, attrs: nil, attributes_as: attributes_as}
       |> decode_header
       |> decode_payload
 
@@ -68,7 +79,8 @@ defmodule Radius.Packet do
   defp decode_code(x), do: x
 
   defp decode_payload(ctx) do
-    decode_tlv(ctx.rest)
+    ctx.rest
+    |> decode_tlv()
     |> resolve_tlv(ctx)
   end
 
@@ -94,7 +106,13 @@ defmodule Radius.Packet do
 
   # VSA Entry
   defp resolve_tlv({26, value}, ctx, nil) do
-    type = "Vendor-Specific"
+    type =
+      if ctx.attributes_as == :integers do
+        Dict.attr_Vendor_Specific()
+      else
+        "Vendor-Specific"
+      end
+
     <<vid::size(32), rest::binary>> = value
 
     try do
@@ -123,6 +141,13 @@ defmodule Radius.Packet do
       attr = vendor_attribute_by_id(vendor, type)
       has_tag = Keyword.has_key?(attr.opts, :has_tag)
 
+      attr_name =
+        if ctx.attributes_as == :integers do
+          type
+        else
+          attr.name
+        end
+
       {tag, value} =
         case value do
           <<0, rest::binary>> when has_tag == true ->
@@ -142,9 +167,9 @@ defmodule Radius.Packet do
         |> decrypt_value(Keyword.get(attr.opts, :encrypt), ctx.auth, ctx.secret)
 
       if tag do
-        {attr.name, {tag, value}}
+        {attr_name, {tag, value}}
       else
-        {attr.name, value}
+        {attr_name, value}
       end
     rescue
       _e in EntryNotFoundError ->
@@ -199,17 +224,17 @@ defmodule Radius.Packet do
   end
 
   @doc """
-    Return an iolist of encoded packet
+  Return an iolist of encoded packet
 
-    for request packets, leave packet.auth == nil, then I will generate one from random bytes.
-    for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
+  for request packets, leave packet.auth == nil, then I will generate one from random bytes.
+  for reply packets, set packet.auth = request.auth, I will calc the reply hash with it.
 
-        packet.attrs :: [attr]
-        attr :: {type,value}
-        type :: String.t | integer | {"Vendor-Specific", vendor}
-        value :: integer | String.t | ipaddr
-        vendor :: String.t | integer
-        ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
+      packet.attrs :: [attr]
+      attr :: {type,value}
+      type :: String.t | integer | {"Vendor-Specific", vendor}
+      value :: integer | String.t | ipaddr
+      vendor :: String.t | integer
+      ipaddr :: {a,b,c,d} | {a,b,c,d,e,f,g,h}
 
   """
   @deprecated "Use encode_request/1-2 or encode_reply/1-2 instead"
@@ -239,6 +264,10 @@ defmodule Radius.Packet do
   @doc """
   Encode the reply packet into an iolist and put the result in the `:raw` key. The `:auth` key needs
   to be filled with the authenticator of the request packet.
+
+  Options:
+
+    * `sign` - `true` if you want to sign the request, `false` by default
   """
   @spec encode_reply(
           packet :: Packet.t(),
@@ -261,7 +290,7 @@ defmodule Radius.Packet do
 
     packet =
       if sign? do
-        attrs = [{"Message-Authenticator", <<0::size(128)>>} | packet.attrs]
+        attrs = [Dict.attr_Message_Authenticator(<<0::size(128)>>) | packet.attrs]
 
         %{packet | attrs: attrs}
       else
@@ -440,8 +469,6 @@ defmodule Radius.Packet do
     do: encode_vsa(Dict.vendor_by_id(vid), vsa, ctx)
 
   defp encode_vsa(vendor, vsa, ctx) do
-    IO.inspect(vendor)
-
     val =
       Enum.map(vsa, fn x ->
         x |> resolve_attr(ctx, vendor) |> encode_attr(vendor.format)

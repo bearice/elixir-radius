@@ -62,8 +62,8 @@ defmodule Radius.PacketTest do
   @sample_rep %Radius.Packet{
     code: "Access-Accept",
     id: 118,
-    length: 173,
-    auth: nil,
+    length: 155,
+    auth: <<25, 149, 189, 198, 178, 14, 197, 28, 131, 240, 157, 146, 150, 38, 53, 105>>,
     attrs: [
       {"NAS-IP-Address", {10, 62, 1, 238}},
       {"NAS-Port", 50001},
@@ -110,6 +110,28 @@ defmodule Radius.PacketTest do
     assert packet.auth == @sample_req.auth
   end
 
+  test "decode reply" do
+    packet = Radius.Packet.decode(@sample_binary_rep, @secret)
+
+    assert {"NAS-Port", 50001} = Enum.find(packet.attrs, fn {k, _v} -> k == "NAS-Port" end)
+    assert packet.code == @sample_rep.code
+    assert packet.id == @sample_rep.id
+    assert packet.length == @sample_rep.length
+    assert packet.auth == @sample_rep.auth
+  end
+
+  test "decode reply - attributes as integer" do
+    packet = Radius.Packet.decode(@sample_binary_rep, @secret, attributes: :integers)
+
+    assert {attr_NAS_Port(), 50001} =
+             Enum.find(packet.attrs, fn {k, _v} -> k == attr_NAS_Port() end)
+
+    assert packet.code == @sample_rep.code
+    assert packet.id == @sample_rep.id
+    assert packet.length == @sample_rep.length
+    assert packet.auth == @sample_rep.auth
+  end
+
   test "encode request - deprecated" do
     # cut authenticator as it will be generated on each encoding
     <<before::size(32), _random::size(128), rest::binary>> =
@@ -151,6 +173,44 @@ defmodule Radius.PacketTest do
 
     <<sample_before::size(32), _random::size(128), sample_rest::binary>> = @sample_binary_req
     assert <<before::size(32), rest::binary>> == <<sample_before::size(32), sample_rest::binary>>
+  end
+
+  test "encode request with vsa" do
+    secret = "112233"
+
+    attrs = [
+      attr_User_Password("1234"),
+      # tagged attribute (rfc2868)
+      attr_Tunnel_Type(val_Tunnel_Type_PPTP()),
+      # equals
+      {attr_Tunnel_Type(), {0, "PPTP"}},
+      attr_Tunnel_Type({10, "PPTP"}),
+      {attr_Service_Type(), "Login-User"},
+      # tag & value can be integer
+      {6, 1},
+      # ipaddr
+      {attr_NAS_IP_Address(), {1, 2, 3, 4}},
+      {attr_NAS_IP_Address(), 0x12345678},
+      # ipv6addr
+      {attr_Login_IPv6_Host(), {2003, 0xEFFF, 0, 0, 0, 0, 0, 4}},
+      # VSA
+      {{attr_Vendor_Specific(), 9},
+       [
+         {"Cisco-Disconnect-Cause", 10},
+         {195, "Unknown"}
+       ]},
+      # empty VSA?
+      {{attr_Vendor_Specific(), "Microsoft"}, []},
+      # some unknown attribute
+      {255, "123456"}
+    ]
+
+    # for request packets, authenticator will generate with random bytes
+    p = %Radius.Packet{code: "Access-Request", id: 12, secret: secret, attrs: attrs}
+    # will return an iolist
+    data = Radius.Packet.encode_request(p) |> Map.get(:raw) |> IO.iodata_to_binary()
+
+    assert is_binary(data)
   end
 
   test "encode reply" do
