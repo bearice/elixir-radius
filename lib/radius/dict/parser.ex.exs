@@ -1,4 +1,5 @@
 defmodule Radius.Dict.Parser do
+  @moduledoc false
   def parse(binary) do
     {:ok, _, "", ctx, _, _} =
       parse_bin(binary, context: [attributes: [], values: [], prepend_key: []])

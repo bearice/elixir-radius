@@ -1,4 +1,5 @@
 defmodule Radius.Util do
+  @moduledoc false
   require Logger
   import Bitwise
 
